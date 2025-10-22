@@ -167,7 +167,7 @@ if uploaded_file:
     elif "ge" in nombre:
         tipo_detectado = "GE"
     elif "dynamic" in nombre:
-        tipo_detectado = "Dynamic"
+        tipo_detectado = "GE"
     elif "3" in nombre or "4" in nombre:
         tipo_detectado = "3° y 4°"
     elif "1" in nombre or "2" in nombre:
@@ -175,7 +175,7 @@ if uploaded_file:
     else:
         tipo_detectado = "3° y 4°"
 
-    opciones = ["3° y 4°", "1° y 2°", "ACP", "GE", "Dynamic"]
+    opciones = ["3° y 4°", "1° y 2°", "ACP", "GE"]
     tipo_base = st.selectbox("Selecciona el tipo de base:", opciones, index=opciones.index(tipo_detectado))
 
     columnas_por_base = {
@@ -183,7 +183,6 @@ if uploaded_file:
         "1° y 2°": ['PREG 21', 'PREG 22', 'PREG 23'],
         "ACP": ['PREG 22', 'PREG 23', 'PREG 24'],
         "GE": ['PREG 25', 'PREG 26', 'PREG 27'],
-        "Dynamic": ['PREG 25', 'PREG 26', 'PREG 27']
     }
 
     columnas_objetivo = [col for col in columnas_por_base[tipo_base] if col in df.columns]
@@ -194,29 +193,24 @@ if uploaded_file:
     # --- Descripciones por base ---
     descripciones_por_base = {
         "3° y 4°": {
-            'PREG 24': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año...",
-            'PREG 25': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede...",
-            'PREG 26': "Pensando en el próximo año (2026), ¿qué mejora puntual harías..."
+            'PREG 24': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año, ¿qué cambios concretos propondrías en el programa que cursaste para que la preparación de la PAES sea más útil y eficaz el próximo año (2026)?",
+            'PREG 25': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede donde estudias para que la experiencia de los estudiantes sea mejor el año 2026?",
+            'PREG 26': "Pensando en el próximo año (2026), ¿qué mejora puntual harías en el Preuniversitario Pedro de Valdivia y por qué?"
         },
         "1° y 2°": {
-            'PREG 21': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año...",
-            'PREG 22': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede...",
-            'PREG 23': "Pensando en el próximo año (2026), ¿qué mejora puntual harías..."
+            'PREG 21': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año, ¿qué cambios concretos propondrías en el programa que cursaste para que la preparación de la PAES sea más útil y eficaz el próximo año (2026)?",
+            'PREG 22': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede donde estudias para que la experiencia de los estudiantes sea mejor el año 2026?",
+            'PREG 23': "Pensando en el próximo año (2026), ¿qué mejora puntual harías en el Preuniversitario Pedro de Valdivia y por qué?"
         },
         "ACP": {
-            'PREG 22': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año...",
-            'PREG 23': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede...",
-            'PREG 24': "Pensando en el próximo año (2026), ¿qué mejora puntual harías..."
+            'PREG 22': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año, ¿qué cambios concretos propondrías en el programa que cursaste para que la preparación de la PAES sea más útil y eficaz el próximo año (2026)?",
+            'PREG 23': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede donde estudias para que la experiencia de los estudiantes sea mejor el año 2026?",
+            'PREG 24': "Pensando en el próximo año (2026), ¿qué mejora puntual harías en el Preuniversitario Pedro de Valdivia y por qué?"
         },
         "GE": {
-            'PREG 25': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año...",
-            'PREG 26': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede...",
-            'PREG 27': "Pensando en el próximo año (2026), ¿qué mejora puntual harías..."
-        },
-        "Dynamic": {
-            'PREG 25': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año...",
-            'PREG 26': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede...",
-            'PREG 27': "Pensando en el próximo año (2026), ¿qué mejora puntual harías..."
+            'PREG 25': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año, ¿qué cambios concretos propondrías en el programa que cursaste para que la preparación de la PAES sea más útil y eficaz el próximo año (2026)?",
+            'PREG 26': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede donde estudias para que la experiencia de los estudiantes sea mejor el año 2026?",
+            'PREG 27': "Pensando en el próximo año (2026), ¿qué mejora puntual harías en el Preuniversitario Pedro de Valdivia y por qué?"
         }
     }
 
