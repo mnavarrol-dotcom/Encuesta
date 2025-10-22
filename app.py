@@ -163,6 +163,24 @@ st.title("Análisis de preguntas abiertas de encuesta académica")
 uploaded_file = st.file_uploader("Carga tu archivo Excel (.xlsx)", type=["xlsx"])
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
+
+    # Filtros para SEDE y NIVEL (si existen en el archivo)
+    sedes_disponibles = df['SEDE'].dropna().unique().tolist() if 'SEDE' in df.columns else []
+    niveles_disponibles = df['NIVEL'].dropna().unique().tolist() if 'NIVEL' in df.columns else []
+
+    sede_seleccionada = None
+    nivel_seleccionado = None
+
+    if sedes_disponibles:
+        sede_seleccionada = st.selectbox("Filtra por SEDE (opcional):", ["Todos"] + sedes_disponibles)
+        if sede_seleccionada != "Todos":
+            df = df[df['SEDE'] == sede_seleccionada]
+
+    if niveles_disponibles:
+        nivel_seleccionado = st.selectbox("Filtra por NIVEL (opcional):", ["Todos"] + niveles_disponibles)
+        if nivel_seleccionado != "Todos":
+            df = df[df['NIVEL'] == nivel_seleccionado]
+
     columnas = ['PREG 22', 'PREG 23', 'PREG 24']
     columnas_existentes = [col for col in columnas if col in df.columns]
 
@@ -170,7 +188,7 @@ if uploaded_file:
         st.error(f"No se encontraron las columnas {columnas}")
     else:
         columna_seleccionada = st.selectbox("Selecciona la columna a analizar:", columnas_existentes)
-        
+
         # Detectar si la columna es la pregunta "¿Qué cambios implementarías?" para usar lexicon extendido
         es_pregunta_cambios = False
         texto_pregunta = quitar_tildes(columna_seleccionada.lower())
