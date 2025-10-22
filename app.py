@@ -162,7 +162,7 @@ def graficar_mapa_calor_coocurrencia(coocurrencia_df, titulo="Mapa de Calor de C
 # -------------------------------
 # INTERFAZ STREAMLIT
 # -------------------------------
-st.title("📊 Análisis de Preguntas Abiertas Académicas")
+st.title("📊 Análisis de Preguntas Abiertas de Encuesta Académica")
 
 uploaded_file = st.file_uploader("📂 Carga tu archivo Excel (.xlsx)", type=["xlsx"])
 
