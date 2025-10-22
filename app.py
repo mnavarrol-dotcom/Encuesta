@@ -10,6 +10,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
 from wordcloud import WordCloud
 import nltk
+import time
 
 # --- DESCARGAR STOPWORDS ---
 try:
@@ -140,50 +141,27 @@ def graficar_frecuencias_palabras(textos):
     plt.clf()
 
 def filtrar_por_palabras(df, columna, palabras_busqueda):
-    # --- Preparación ---
-    palabras_proc = [quitar_tildes(str(p).strip().lower()) for p in palabras_busqueda if str(p).strip()]
+    palabras_proc = [quitar_tildes(p.strip().lower()) for p in palabras_busqueda if p.strip()]
     if not palabras_proc:
         return pd.DataFrame(), {}, {}
-
-    # Convertir toda la columna a texto seguro y normalizado
-    textos = df[columna].fillna("").astype(str).apply(lambda x: quitar_tildes(x.lower()))
-
-    # Crear patrón regex con todas las palabras
-    patron = "|".join([re.escape(p) for p in palabras_proc])
-    mask = textos.str.contains(patron, regex=True, na=False)
-
-    # Filtrar DataFrame
-    df_filtrado = df[mask].copy()
-
-    # Crear barra de progreso
-    progress_text = "Buscando coincidencias..."
-    barra = st.progress(0, text=progress_text)
-
-    total, textos_con_palabra = {}, {}
-    total_palabras = len(palabras_proc)
-
-    # Calcular ocurrencias palabra por palabra
-    for i, p in enumerate(palabras_proc, start=1):
-        ocurrencias = textos[mask].str.count(p, flags=re.IGNORECASE)
-        total[p] = int(ocurrencias.sum())
-        textos_con_palabra[p] = int((ocurrencias > 0).sum())
-
-        # Actualizar progreso
-        barra.progress(i / total_palabras, text=f"Analizando palabra: '{p}'")
-
-    # Completar barra
-    barra.progress(1.0, text="✅ Búsqueda completada")
-
-    return df_filtrado, total, textos_con_palabra
+    mask = df[columna].fillna("").apply(lambda txt: isinstance(txt, str) and any(p in quitar_tildes(txt.lower()) for p in palabras_proc))
+    df_filtrado = df[mask]
+    total, textos = {}, {}
+    for p in palabras_proc:
+        ocurrencias = df_filtrado[columna].fillna("").apply(lambda txt: quitar_tildes(txt.lower()).count(p))
+        total[p] = ocurrencias.sum()
+        textos[p] = (ocurrencias > 0).sum()
+    return df_filtrado, total, textos
 
 
 # --- INTERFAZ ---
-uploaded_file = st.file_uploader("Carga tu archivo Excel (.xlsx)", type=["xlsx"])
+uploaded_file = st.file_uploader("📂 Carga tu archivo Excel (.xlsx)", type=["xlsx"])
 if uploaded_file:
+    progress = st.progress(0)
     df = pd.read_excel(uploaded_file)
-    nombre = uploaded_file.name.lower()
+    progress.progress(10)
 
-    # --- DETECCIÓN AUTOMÁTICA DE BASE ---
+    nombre = uploaded_file.name.lower()
     if "acp" in nombre:
         tipo_detectado = "ACP"
     elif "ge" in nombre:
@@ -197,25 +175,55 @@ if uploaded_file:
     else:
         tipo_detectado = "3° y 4°"
 
-    # --- SELECCIÓN DE BASE ---
-    opciones = ["3° y 4°", "1° y 2°", "ACP", "GE"]
+    opciones = ["3° y 4°", "1° y 2°", "ACP", "GE", "Dynamic"]
     tipo_base = st.selectbox("Selecciona el tipo de base:", opciones, index=opciones.index(tipo_detectado))
 
-    # --- COLUMNAS SEGÚN BASE ---
     columnas_por_base = {
         "3° y 4°": ['PREG 24', 'PREG 25', 'PREG 26'],
         "1° y 2°": ['PREG 21', 'PREG 22', 'PREG 23'],
         "ACP": ['PREG 22', 'PREG 23', 'PREG 24'],
         "GE": ['PREG 25', 'PREG 26', 'PREG 27'],
+        "Dynamic": ['PREG 25', 'PREG 26', 'PREG 27']
     }
 
-    # --- VALIDAR COLUMNAS EXISTENTES ---
-    columnas_objetivo = [c for c in columnas_por_base[tipo_base] if c in df.columns]
-    if not columnas_objetivo:
-        st.error(f"No se encontraron columnas válidas para la base seleccionada: {tipo_base}")
-        st.stop()
+    columnas_objetivo = [col for col in columnas_por_base[tipo_base] if col in df.columns]
+    progress.progress(25)
 
-    # --- FILTROS SEDE / NIVEL ---
+    columna_seleccionada = st.selectbox("Selecciona la pregunta a analizar:", columnas_objetivo)
+
+    # --- Descripciones por base ---
+    descripciones_por_base = {
+        "3° y 4°": {
+            'PREG 24': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año...",
+            'PREG 25': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede...",
+            'PREG 26': "Pensando en el próximo año (2026), ¿qué mejora puntual harías..."
+        },
+        "1° y 2°": {
+            'PREG 21': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año...",
+            'PREG 22': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede...",
+            'PREG 23': "Pensando en el próximo año (2026), ¿qué mejora puntual harías..."
+        },
+        "ACP": {
+            'PREG 22': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año...",
+            'PREG 23': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede...",
+            'PREG 24': "Pensando en el próximo año (2026), ¿qué mejora puntual harías..."
+        },
+        "GE": {
+            'PREG 25': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año...",
+            'PREG 26': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede...",
+            'PREG 27': "Pensando en el próximo año (2026), ¿qué mejora puntual harías..."
+        },
+        "Dynamic": {
+            'PREG 25': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año...",
+            'PREG 26': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede...",
+            'PREG 27': "Pensando en el próximo año (2026), ¿qué mejora puntual harías..."
+        }
+    }
+
+    if tipo_base in descripciones_por_base and columna_seleccionada in descripciones_por_base[tipo_base]:
+        st.info(f"**Descripción:**\n\n{descripciones_por_base[tipo_base][columna_seleccionada]}")
+
+    # Filtros
     if 'SEDE' in df.columns:
         sede_sel = st.selectbox("Filtrar por SEDE:", ["Todos"] + sorted(df['SEDE'].dropna().unique().tolist()))
         if sede_sel != "Todos":
@@ -226,74 +234,18 @@ if uploaded_file:
         if nivel_sel != "Todos":
             df = df[df['NIVEL'] == nivel_sel]
 
-    # --- SELECCIÓN DE PREGUNTA ---
-    columna_seleccionada = st.selectbox("Selecciona la pregunta a analizar:", columnas_objetivo)
-# --- Selector de columna según base detectada ---
-columna_seleccionada = st.selectbox("Selecciona la pregunta a analizar:", columnas_objetivo)
-
-# --- Descripciones adaptadas a cada base ---
-descripciones_por_base = {
-    "3° y 4°": {
-        'PREG 24': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año, ¿qué cambios concretos propondrías en el programa que cursaste (Competencia Lectora, Matemática, Ciencias, Historia, etc.) para que la preparación de la PAES sea más útil y eficaz el próximo año (2026)? (pregunta abierta)",
-        'PREG 25': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede donde estudias para que la experiencia de los estudiantes sea mejor el año 2026? (pregunta abierta)",
-        'PREG 26': "Pensando en el próximo año (2026), ¿qué mejora puntual harías en el Preuniversitario Pedro de Valdivia y por qué? (pregunta abierta)"
-    },
-    "1° y 2°": {
-        'PREG 21': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año, ¿qué cambios concretos propondrías en el programa que cursaste (Competencia Lectora, Matemática, Ciencias, Historia, etc.) para que la preparación de la PAES sea más útil y eficaz el próximo año (2026)? (pregunta abierta)",
-        'PREG 22': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede donde estudias para que la experiencia de los estudiantes sea mejor el año 2026? (pregunta abierta)",
-        'PREG 23': "Pensando en el próximo año (2026), ¿qué mejora puntual harías en el Preuniversitario Pedro de Valdivia y por qué? (pregunta abierta)"
-    },
-    "ACP": {
-        'PREG 22': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año, ¿qué cambios concretos propondrías en el programa que cursaste (Competencia Lectora, Matemática, Ciencias, Historia, etc.) para que la preparación de la PAES sea más útil y eficaz el próximo año (2026)? (pregunta abierta)",
-        'PREG 23': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede donde estudias para que la experiencia de los estudiantes sea mejor el año 2026? (pregunta abierta)",
-        'PREG 24': "Pensando en el próximo año (2026), ¿qué mejora puntual harías en el Preuniversitario Pedro de Valdivia y por qué? (pregunta abierta)"
-    },
-    "GE": {
-        'PREG 25': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año, ¿qué cambios concretos propondrías en el programa que cursaste (Competencia Lectora, Matemática, Ciencias, Historia, etc.) para que la preparación de la PAES sea más útil y eficaz el próximo año (2026)? (pregunta abierta)",
-        'PREG 26': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede donde estudias para que la experiencia de los estudiantes sea mejor el año 2026? (pregunta abierta)",
-        'PREG 27': "Pensando en el próximo año (2026), ¿qué mejora puntual harías en el Preuniversitario Pedro de Valdivia y por qué? (pregunta abierta)"
-    },
-    "Dynamic": {
-        'PREG 25': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año, ¿qué cambios concretos propondrías en el programa que cursaste (Competencia Lectora, Matemática, Ciencias, Historia, etc.) para que la preparación de la PAES sea más útil y eficaz el próximo año (2026)? (pregunta abierta)",
-        'PREG 26': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede donde estudias para que la experiencia de los estudiantes sea mejor el año 2026? (pregunta abierta)",
-        'PREG 27': "Pensando en el próximo año (2026), ¿qué mejora puntual harías en el Preuniversitario Pedro de Valdivia y por qué? (pregunta abierta)"
-    }
-}
-
-# --- Mostrar descripción correspondiente ---
-if tipo_base in descripciones_por_base:
-    descripciones = descripciones_por_base[tipo_base]
-    if columna_seleccionada in descripciones:
-        st.info(f"**Descripción de la pregunta seleccionada:**\n\n{descripciones[columna_seleccionada]}")
-    else:
-        st.warning("No hay una descripción definida para esta pregunta dentro de esta base.")
-else:
-    st.warning("No se encontró un conjunto de descripciones asociado a esta base.")
-
-# --- Mostrar descripción correspondiente ---
-if tipo_base in descripciones_por_base:
-    descripciones = descripciones_por_base[tipo_base]
-    if columna_seleccionada in descripciones:
-        st.info(f"**Descripción de la pregunta seleccionada:**\n\n{descripciones[columna_seleccionada]}")
-    else:
-        st.warning("No hay una descripción definida para esta pregunta dentro de esta base.")
-else:
-    st.warning("No se encontró un conjunto de descripciones asociado a esta base.")
-    st.divider()
+    progress.progress(50)
     st.subheader(f"🔍 Análisis de {columna_seleccionada}")
 
-    # --- ANÁLISIS DE SENTIMIENTO ---
     es_cambios = 'cambio' in columna_seleccionada.lower()
-    df[columna_seleccionada + '_sentimiento'] = df[columna_seleccionada].apply(
-        lambda x: sentimiento_vader(x, es_cambios)
-    )
+    df[columna_seleccionada + '_sentimiento'] = df[columna_seleccionada].apply(lambda x: sentimiento_vader(x, es_cambios))
 
     graficar_distribucion_sentimientos(df[columna_seleccionada + '_sentimiento'], columna_seleccionada)
     textos_proc = preprocesar_textos(df[columna_seleccionada])
 
-    # --- ANÁLISIS DE TEMAS ---
+    progress.progress(75)
     if len(textos_proc) >= 10:
-        st.subheader("🧩 Temas identificados")
+        st.subheader("Temas identificados")
         temas = codificar_temas(textos_proc)
         for t in temas:
             st.write("• " + t)
@@ -303,21 +255,20 @@ else:
     else:
         st.info("No hay suficientes textos para el análisis de temas (mínimo 10).")
 
+    progress.progress(90)
     # --- FILTRO POR PALABRAS ---
     st.subheader("🪶 Búsqueda de palabras clave")
     palabras_entrada = st.text_input("Palabras separadas por comas (ej: examen, presencial, rápido)")
     if st.button("Buscar palabras"):
         if palabras_entrada.strip():
             palabras_lista = [p.strip() for p in palabras_entrada.split(",")]
-            df_filtrado_palabras, total_ocurrencias, textos_con_palabra = filtrar_por_palabras(
-                df, columna_seleccionada, palabras_lista
-            )
+            df_filtrado_palabras, total_ocurrencias, textos_con_palabra = filtrar_por_palabras(df, columna_seleccionada, palabras_lista)
             if df_filtrado_palabras.empty:
                 st.warning("No se encontraron comentarios con esas palabras.")
             else:
                 st.write(f"**{len(df_filtrado_palabras)} comentarios** contienen al menos una de las palabras buscadas.")
                 df_ocurrencias = pd.DataFrame({
-                    "Palabra": [p.replace('_', ' ') for p in total_ocurrencias.keys()],
+                    "Palabra": [p.replace('_',' ') for p in total_ocurrencias.keys()],
                     "Total de apariciones": total_ocurrencias.values(),
                     "Número de textos que la mencionan": [textos_con_palabra[p] for p in total_ocurrencias.keys()]
                 })
@@ -326,6 +277,8 @@ else:
                 st.write(df_filtrado_palabras[[columna_seleccionada]])
         else:
             st.warning("Ingresa al menos una palabra para buscar.")
+
+    progress.progress(100)
+    st.success("✅ Análisis completado correctamente.")
 else:
     st.info("📂 Carga un archivo Excel para comenzar el análisis.")
-
