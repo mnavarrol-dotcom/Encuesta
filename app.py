@@ -36,7 +36,7 @@ def sentimiento_vader(texto):
 
 def preprocesar_textos(textos):
     stopwords_personalizadas = {'creo', 'hacer', 'siento', 'verdad', 'tan'}
-stopwords_totales = set(spanish_stopwords) | stopwords_personalizadas
+    stopwords_totales = set(spanish_stopwords) | stopwords_personalizadas
 
 EXPRESIONES_UNIDAS = {
     "ensayo presencial": "ensayo_presencial",
