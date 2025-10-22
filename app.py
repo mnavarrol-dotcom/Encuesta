@@ -6,10 +6,11 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
 from wordcloud import WordCloud
-import nltk
+import itertools
 import re
 import unicodedata
-from collections import Counter
+from collections import Counter, defaultdict
+import nltk
 
 nltk.download('stopwords')
 from nltk.corpus import stopwords
@@ -52,7 +53,7 @@ lexicon_cambios = {
 }
 
 # -------------------------------
-# FUNCIONES DE PREPROCESAMIENTO
+# FUNCIONES DE PROCESAMIENTO
 # -------------------------------
 def quitar_tildes(texto):
     texto = unicodedata.normalize('NFD', texto)
@@ -61,39 +62,48 @@ def quitar_tildes(texto):
 def agrupar_mas_con_palabra(texto):
     return re.sub(r'\bmas (\w{3,})', r'mas_\1', texto)
 
+@st.cache_data
 def preprocesar_textos(textos):
-    textos_procesados = []
+    procesados = []
     for t in textos:
         if not isinstance(t, str) or len(t.strip()) < 5:
             continue
         t = t.lower()
         t = quitar_tildes(t)
         t = re.sub(r'\s+', ' ', t)
-        for expresion, reemplazo in EXPRESIONES_UNIDAS.items():
-            t = t.replace(expresion, reemplazo)
+        for expr, repl in EXPRESIONES_UNIDAS.items():
+            t = t.replace(expr, repl)
         t = agrupar_mas_con_palabra(t)
         t = re.sub(r'[^a-zA-Z_ñ\s]', '', t)
         palabras = [p for p in t.split() if p not in stopwords_totales and len(p) > 2]
         if palabras:
-            textos_procesados.append(" ".join(palabras))
-    return textos_procesados
+            procesados.append(" ".join(palabras))
+    return procesados
 
 # -------------------------------
-# SENTIMIENTO Y TEMAS
+# FUNCIONES DE ANÁLISIS
 # -------------------------------
-def sentimiento_vader(texto, es_pregunta_cambios=False):
-    if not isinstance(texto, str) or not texto.strip():
-        return None
+@st.cache_resource
+def sentimiento_vader_lista(textos, es_pregunta_cambios=False):
     analyzer = SentimentIntensityAnalyzer()
     if es_pregunta_cambios:
         analyzer.lexicon.update({**base_lexicon, **lexicon_cambios})
     else:
         analyzer.lexicon.update(base_lexicon)
-    compound = analyzer.polarity_scores(texto)['compound']
-    return 'Positivo' if compound >= 0.05 else 'Negativo' if compound <= -0.05 else 'Neutro'
+    resultados = []
+    for t in textos:
+        if not isinstance(t, str) or not t.strip():
+            resultados.append(None)
+        else:
+            comp = analyzer.polarity_scores(t)['compound']
+            resultados.append('Positivo' if comp >= 0.05 else 'Negativo' if comp <= -0.05 else 'Neutro')
+    return resultados
 
+@st.cache_resource
 def codificar_temas(textos, n_topics=3, n_palabras=5):
-    vectorizer = CountVectorizer(stop_words=list(stopwords_totales), max_features=1000)
+    if len(textos) < 5:
+        return ["Datos insuficientes"]
+    vectorizer = CountVectorizer(stop_words=list(stopwords_totales), max_features=700, min_df=3, max_df=0.8)
     X = vectorizer.fit_transform(textos)
     lda = LatentDirichletAllocation(n_components=n_topics, random_state=42)
     lda.fit(X)
@@ -104,98 +114,91 @@ def codificar_temas(textos, n_topics=3, n_palabras=5):
         temas.append(f"Tema {idx+1}: " + ", ".join(top_words))
     return temas
 
+@st.cache_data
+def calcular_coocurrencia_opt(textos, top_n=30):
+    palabras = " ".join(textos).split()
+    top = [p for p, _ in Counter(palabras).most_common(top_n)]
+    top_set = set(top)
+    cooc = defaultdict(Counter)
+    for t in textos:
+        tokens = [p for p in set(t.split()) if p in top_set]
+        for w1, w2 in itertools.combinations(tokens, 2):
+            cooc[w1][w2] += 1
+            cooc[w2][w1] += 1
+    df = pd.DataFrame(cooc).fillna(0).reindex(index=top, columns=top, fill_value=0)
+    return df
+
 # -------------------------------
-# GRAFICACIÓN
+# FUNCIONES DE GRAFICACIÓN
 # -------------------------------
-def graficar_distribucion_sentimientos(data, columna):
+def graficar_distribucion_sentimientos(sentimientos, columna):
     plt.figure(figsize=(6,4))
-    palette = {'Negativo': '#e74c3c', 'Neutro': '#95a5a6', 'Positivo': '#2ecc71'}
-    sns.countplot(x=data, palette=palette)
+    sns.countplot(x=sentimientos, palette={'Negativo':'#e74c3c','Neutro':'#95a5a6','Positivo':'#2ecc71'})
     plt.title(f"Distribución Sentimientos - {columna}")
-    plt.tight_layout()
     st.pyplot(plt)
     plt.clf()
 
 def mostrar_nube(textos):
     texto_unido = " ".join(textos)
     if not texto_unido.strip():
-        st.info("No hay texto suficiente para generar la nube.")
+        st.info("No hay texto suficiente para la nube.")
         return
-    wordcloud = WordCloud(stopwords=stopwords_totales, background_color="white", width=800, height=400).generate(texto_unido)
+    wc = WordCloud(stopwords=stopwords_totales, background_color="white", width=800, height=400).generate(texto_unido)
     plt.figure(figsize=(10,5))
-    plt.imshow(wordcloud, interpolation='bilinear')
+    plt.imshow(wc, interpolation='bilinear')
     plt.axis('off')
     st.pyplot(plt)
     plt.clf()
 
-def graficar_frecuencias_palabras(textos):
+def graficar_frecuencias(textos):
     palabras = " ".join(textos).split()
-    mas_comunes = Counter(palabras).most_common(20)
+    comunes = Counter(palabras).most_common(20)
     plt.figure(figsize=(10,6))
-    sns.barplot(x=[p[1] for p in mas_comunes], y=[p[0].replace('_',' ') for p in mas_comunes], palette="viridis")
+    sns.barplot(x=[p[1] for p in comunes], y=[p[0].replace('_',' ') for p in comunes], palette="viridis")
     plt.title("Frecuencia de palabras más comunes")
     st.pyplot(plt)
     plt.clf()
 
-def calcular_coocurrencia(textos, top_n=30):
-    palabras = " ".join(textos).split()
-    top = [p for p, _ in Counter(palabras).most_common(top_n)]
-    matrix = pd.DataFrame(0, index=top, columns=top)
-    for t in textos:
-        tokens = set(t.split())
-        for w1 in tokens:
-            for w2 in tokens:
-                if w1 in top and w2 in top:
-                    matrix.loc[w1, w2] += 1
-    return matrix
-
-def graficar_mapa_calor_coocurrencia(coocurrencia_df, titulo="Mapa de Calor de Coocurrencia"):
-    if coocurrencia_df.empty:
-        st.info("No hay datos suficientes para generar el mapa de calor.")
+def graficar_mapa_calor(df, titulo):
+    if df.empty:
+        st.info("No hay datos suficientes para el mapa de calor.")
         return
     plt.figure(figsize=(10,8))
-    sns.heatmap(coocurrencia_df, cmap="coolwarm", linewidths=0.5)
+    sns.heatmap(df, cmap="coolwarm", linewidths=0.5)
     plt.title(titulo)
     st.pyplot(plt)
     plt.clf()
 
 # -------------------------------
-# INTERFAZ STREAMLIT
+# APLICACIÓN STREAMLIT
 # -------------------------------
-st.title("📊 Análisis de Preguntas Abiertas de Encuesta Académica")
+st.title("📊 Análisis optimizado de respuestas abiertas académicas")
 
-uploaded_file = st.file_uploader("📂 Carga tu archivo Excel (.xlsx)", type=["xlsx"])
+uploaded_file = st.file_uploader("Carga tu archivo Excel (.xlsx)", type=["xlsx"])
 
 if uploaded_file:
-    df = pd.read_excel(uploaded_file)
+    @st.cache_data
+    def cargar_excel(f):
+        return pd.read_excel(f)
+    
+    df = cargar_excel(uploaded_file)
     nombre = uploaded_file.name.lower()
 
-    # Detección automática del tipo de base
+    # --- Detectar tipo de base automáticamente ---
     if "acp" in nombre:
-        tipo_base = "ACP"
+        tipo_detectado = "ACP"
     elif "ge" in nombre:
-        tipo_base = "GE"
+        tipo_detectado = "GE"
     elif "dynamic" in nombre:
-        tipo_base = "Dynamic"
-    elif any(c in nombre for c in ["3", "cuarto", "tercero"]):
-        tipo_base = "3° y 4°"
-    elif any(c in nombre for c in ["1", "2", "primero", "segundo"]):
-        tipo_base = "1° y 2°"
+        tipo_detectado = "Dynamic"
+    elif "3" in nombre or "4" in nombre:
+        tipo_detectado = "3° y 4°"
+    elif "1" in nombre or "2" in nombre:
+        tipo_detectado = "1° y 2°"
     else:
-        # Detectar por columnas presentes
-        cols = list(df.columns)
-        if 'PREG 24' in cols and 'PREG 25' in cols:
-            tipo_base = "3° y 4°"
-        elif 'PREG 21' in cols and 'PREG 22' in cols:
-            tipo_base = "1° y 2°"
-        elif 'PREG 22' in cols and 'PREG 23' in cols:
-            tipo_base = "ACP"
-        elif 'PREG 25' in cols and 'PREG 26' in cols:
-            tipo_base = "GE"
-        else:
-            tipo_base = "Desconocida"
+        tipo_detectado = "3° y 4°"
 
-    st.success(f"✅ Tipo de base detectado automáticamente: **{tipo_base}**")
+    st.subheader(f"📂 Tipo de base detectada automáticamente: **{tipo_detectado}**")
 
     columnas_por_base = {
         "3° y 4°": ['PREG 24', 'PREG 25', 'PREG 26'],
@@ -204,47 +207,55 @@ if uploaded_file:
         "GE": ['PREG 25', 'PREG 26', 'PREG 27'],
         "Dynamic": ['PREG 25', 'PREG 26', 'PREG 27']
     }
+    columnas_disponibles = [c for c in columnas_por_base[tipo_detectado] if c in df.columns]
 
-    columnas_disponibles = [c for c in columnas_por_base.get(tipo_base, []) if c in df.columns]
     if not columnas_disponibles:
-        st.warning("No se detectaron columnas válidas de preguntas abiertas en esta base.")
-    else:
-        columna_sel = st.selectbox("Selecciona la pregunta a analizar:", ["Todas"] + columnas_disponibles)
+        st.error("No se encontraron columnas PREG esperadas en la base cargada.")
+        st.stop()
 
-        # Filtros SEDE y NIVEL
-        if "SEDE" in df.columns and "NIVEL" in df.columns:
-            col1, col2 = st.columns(2)
-            with col1:
-                sede_sel = st.multiselect("Filtrar por SEDE:", sorted(df["SEDE"].dropna().unique()))
-            with col2:
-                nivel_sel = st.multiselect("Filtrar por NIVEL:", sorted(df["NIVEL"].dropna().unique()))
-            if sede_sel:
-                df = df[df["SEDE"].isin(sede_sel)]
-            if nivel_sel:
-                df = df[df["NIVEL"].isin(nivel_sel)]
+    # --- Filtros SEDE, NIVEL y PREG ---
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        sede_sel = st.multiselect("Filtrar por SEDE:", sorted(df["SEDE"].dropna().unique()) if "SEDE" in df else [])
+    with col2:
+        nivel_sel = st.multiselect("Filtrar por NIVEL:", sorted(df["NIVEL"].dropna().unique()) if "NIVEL" in df else [])
+    with col3:
+        preg_sel = st.selectbox("Selecciona la pregunta a analizar:", columnas_disponibles)
 
-        columnas_a_analizar = columnas_disponibles if columna_sel == "Todas" else [columna_sel]
+    if sede_sel:
+        df = df[df["SEDE"].isin(sede_sel)]
+    if nivel_sel:
+        df = df[df["NIVEL"].isin(nivel_sel)]
 
-        for col in columnas_a_analizar:
-            st.markdown(f"### 🔍 Análisis de {col}")
-            es_pregunta_cambios = "cambio" in col.lower()
-            df[col + "_sentimiento"] = df[col].apply(lambda x: sentimiento_vader(x, es_pregunta_cambios))
-            graficar_distribucion_sentimientos(df[col + "_sentimiento"], col)
+    # --- Modo rápido ---
+    modo_rapido = st.checkbox("⚡ Activar modo rápido (solo primeras 500 filas)")
+    if modo_rapido:
+        df = df.head(500)
 
-            textos = preprocesar_textos(df[col])
-            if len(textos) >= 10:
-                temas = codificar_temas(textos)
-                st.write("**Temas principales:**")
-                for t in temas:
-                    st.write("-", t)
-                st.subheader("☁️ Nube de palabras")
-                mostrar_nube(textos)
-                st.subheader("📈 Frecuencia de palabras")
-                graficar_frecuencias_palabras(textos)
-                st.subheader("🔥 Mapa de calor de coocurrencia")
-                cooc = calcular_coocurrencia(textos)
-                graficar_mapa_calor_coocurrencia(cooc)
-            else:
-                st.info(f"No hay suficientes textos en {col} para análisis (mínimo 10).")
-else:
-    st.info("Por favor, carga un archivo Excel para comenzar el análisis.")
+    st.subheader(f"📊 Análisis de {preg_sel}")
+
+    textos = preprocesar_textos(df[preg_sel].dropna().astype(str))
+    if len(textos) == 0:
+        st.warning("No hay texto suficiente para analizar.")
+        st.stop()
+
+    with st.spinner("Analizando sentimientos..."):
+        sentimientos = sentimiento_vader_lista(textos)
+
+    graficar_distribucion_sentimientos(sentimientos, preg_sel)
+
+    if st.checkbox("Mostrar nube de palabras"):
+        mostrar_nube(textos)
+
+    if st.checkbox("Mostrar frecuencias de palabras"):
+        graficar_frecuencias(textos)
+
+    if st.checkbox("Mostrar temas (LDA)"):
+        temas = codificar_temas(textos)
+        st.write("**Temas detectados:**")
+        for t in temas:
+            st.markdown(f"- {t}")
+
+    if st.checkbox("Mostrar mapa de calor de coocurrencia"):
+        cooc = calcular_coocurrencia_opt(textos)
+        graficar_mapa_calor(cooc, f"Coocurrencia - {preg_sel}")
