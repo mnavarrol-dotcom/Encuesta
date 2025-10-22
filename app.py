@@ -7,6 +7,8 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
 from wordcloud import WordCloud
 import nltk
+import unicodedata
+import re
 nltk.download('stopwords')
 from nltk.corpus import stopwords
 spanish_stopwords = stopwords.words('spanish')
@@ -33,8 +35,51 @@ def sentimiento_vader(texto):
         return 'Neutro'
 
 def preprocesar_textos(textos):
-    return [str(t).lower().replace("más ", "más_").replace(" mas ", " más_")
-            for t in textos if isinstance(t, str) and len(t.strip()) >= 5]
+    stopwords_personalizadas = {'creo', 'hacer', 'siento', 'verdad', 'tan'}
+stopwords_totales = set(spanish_stopwords) | stopwords_personalizadas
+
+EXPRESIONES_UNIDAS = {
+    "ensayo presencial": "ensayo_presencial",
+    "clases virtuales": "clases_virtuales",
+    "trabajo final": "trabajo_final",
+    "examen final": "examen_final",
+    "clases presenciales": "clases_presenciales",
+    "horario flexible": "horario_flexible",
+    "material didáctico": "material_didactico",
+    "tutor virtual": "tutor_virtual",
+    "apoyo docente": "apoyo_docente",
+    "evaluación continua": "evaluacion_continua"
+}
+
+def quitar_tildes(texto):
+    return ''.join(
+        c for c in unicodedata.normalize('NFD', texto)
+        if unicodedata.category(c) != 'Mn'
+    )
+
+def preprocesar_textos(textos):
+    textos_procesados = []
+    for t in textos:
+        if not isinstance(t, str) or len(t.strip()) < 5:
+            continue
+        t = t.lower()
+        t = quitar_tildes(t)
+
+        # Unir expresiones definidas
+        for expresion, reemplazo in EXPRESIONES_UNIDAS.items():
+            t = t.replace(expresion, reemplazo)
+
+        # Normalizar "más"/"mas"
+        t = t.replace("mas ", "mas_ ").replace(" más ", "mas_ ")
+
+        # Eliminar caracteres especiales y números (opcional)
+        t = re.sub(r'[^a-zA-Z_áéíóúñ\s]', '', t)
+
+        palabras = t.split()
+        palabras_filtradas = [p for p in palabras if p not in stopwords_totales and len(p) > 2]
+        if palabras_filtradas:
+            textos_procesados.append(" ".join(palabras_filtradas))
+    return textos_procesados
 
 def codificar_temas(textos, n_topics=3, n_palabras=5):
     vectorizer = CountVectorizer(stop_words=spanish_stopwords, max_features=1000)
