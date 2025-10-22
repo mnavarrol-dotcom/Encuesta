@@ -111,7 +111,7 @@ def graficar_distribucion_sentimientos(data, columna):
     plt.figure(figsize=(6,4))
     palette = {'Negativo': '#e74c3c', 'Neutro': '#95a5a6', 'Positivo': '#2ecc71'}
     sns.countplot(x=data, palette=palette)
-    plt.title(f"Distribución Sentimientos - {columna}")
+    plt.title(f"Distribución de Sentimientos - {columna}")
     plt.tight_layout()
     st.pyplot(plt)
     plt.clf()
@@ -137,9 +137,6 @@ def graficar_frecuencias_palabras(textos):
     st.pyplot(plt)
     plt.clf()
 
-# -------------------------------
-# COOCURRENCIA Y MAPA DE CALOR
-# -------------------------------
 def calcular_coocurrencia(textos, top_n=30):
     palabras = " ".join(textos).split()
     top = [p for p, _ in Counter(palabras).most_common(top_n)]
@@ -157,7 +154,7 @@ def graficar_mapa_calor_coocurrencia(coocurrencia_df, titulo="Mapa de Calor de C
         st.info("No hay datos suficientes para generar el mapa de calor.")
         return
     plt.figure(figsize=(10,8))
-    sns.heatmap(coocurrencia_df, cmap="coolwarm", linewidths=0.5, annot=False)
+    sns.heatmap(coocurrencia_df, cmap="coolwarm", linewidths=0.5)
     plt.title(titulo)
     st.pyplot(plt)
     plt.clf()
@@ -172,7 +169,20 @@ if uploaded_file:
     df = pd.read_excel(uploaded_file)
     nombre = uploaded_file.name.lower()
 
-    # Detección automática de base
+    # --- Filtros por SEDE y NIVEL ---
+    if "SEDE" in df.columns and "NIVEL" in df.columns:
+        col1, col2 = st.columns(2)
+        with col1:
+            sede_sel = st.multiselect("Filtrar por SEDE:", sorted(df["SEDE"].dropna().unique()))
+        with col2:
+            nivel_sel = st.multiselect("Filtrar por NIVEL:", sorted(df["NIVEL"].dropna().unique()))
+        
+        if sede_sel:
+            df = df[df["SEDE"].isin(sede_sel)]
+        if nivel_sel:
+            df = df[df["NIVEL"].isin(nivel_sel)]
+
+    # --- Detección automática del tipo de base ---
     if "acp" in nombre:
         tipo_detectado = "ACP"
     elif "ge" in nombre:
@@ -198,29 +208,35 @@ if uploaded_file:
     }
 
     columnas = [c for c in columnas_por_base[tipo_base] if c in df.columns]
-    if not columnas:
-        st.error("No se encontraron las columnas esperadas.")
-    else:
-        st.success(f"Analizando columnas: {', '.join(columnas)}")
 
-        for col in columnas:
-            st.subheader(f"🔹 Análisis de: {col}")
-            es_pregunta_cambios = 'cambio' in col.lower()
-            df[col + '_sentimiento'] = df[col].apply(lambda x: sentimiento_vader(x, es_pregunta_cambios))
-            graficar_distribucion_sentimientos(df[col + '_sentimiento'], col)
+    if not columnas:
+        st.error(f"No se encontraron las columnas esperadas para {tipo_base}.")
+    else:
+        st.subheader("📋 Selección de pregunta para análisis")
+        columna_sel = st.selectbox("Elige una columna para analizar:", ["Todas"] + columnas)
+
+        columnas_a_analizar = columnas if columna_sel == "Todas" else [columna_sel]
+
+        for col in columnas_a_analizar:
+            st.markdown(f"### 🔍 Análisis de {col}")
+            es_pregunta_cambios = "cambio" in col.lower()
+            df[col + "_sentimiento"] = df[col].apply(lambda x: sentimiento_vader(x, es_pregunta_cambios))
+            graficar_distribucion_sentimientos(df[col + "_sentimiento"], col)
 
             textos = preprocesar_textos(df[col])
-            if len(textos) >= 5:
-                st.write("Temas identificados:")
-                for t in codificar_temas(textos):
+            if len(textos) >= 10:
+                temas = codificar_temas(textos)
+                st.write("Temas principales:**")
+                for t in temas:
                     st.write("-", t)
+                st.subheader("Nube de palabras")
                 mostrar_nube(textos)
+                st.subheader("Frecuencia de palabras")
                 graficar_frecuencias_palabras(textos)
-
                 st.subheader("Mapa de calor de coocurrencia")
                 cooc = calcular_coocurrencia(textos)
                 graficar_mapa_calor_coocurrencia(cooc)
             else:
-                st.info("No hay suficientes textos para análisis.")
+                st.info(f"No hay suficientes textos en {col} para análisis (mínimo 10).")
 else:
-    st.info("📥 Carga un archivo para comenzar.")
+    st.info("Carga un archivo para comenzar el análisis.")
