@@ -11,7 +11,7 @@ import re
 import unicodedata
 from collections import Counter
 
-# Descargar stopwords
+# Descargar stopwords de NLTK
 nltk.download('stopwords')
 from nltk.corpus import stopwords
 
@@ -20,7 +20,7 @@ spanish_stopwords = stopwords.words('spanish')
 stopwords_personalizadas = {'creo', 'hacer', 'siento', 'verdad', 'tan'}
 stopwords_totales = set(spanish_stopwords) | stopwords_personalizadas
 
-# Expresiones clave para unir
+# Expresiones clave para agrupar (opcional)
 EXPRESIONES_UNIDAS = {
     "ensayo presencial": "ensayo_presencial",
     "clases virtuales": "clases_virtuales",
@@ -34,7 +34,7 @@ EXPRESIONES_UNIDAS = {
     "evaluación continua": "evaluacion_continua"
 }
 
-# Inicializar VADER con léxico extendido
+# Inicializar VADER
 analyzer = SentimentIntensityAnalyzer()
 spanish_lexicon = {
     'bueno': 2.0, 'excelente': 3.0, 'malo': -2.0, 'terrible': -3.0,
@@ -44,14 +44,18 @@ spanish_lexicon = {
 }
 analyzer.lexicon.update(spanish_lexicon)
 
-# Función para quitar tildes
+# Eliminar tildes
 def quitar_tildes(texto):
     return ''.join(
         c for c in unicodedata.normalize('NFD', texto)
         if unicodedata.category(c) != 'Mn'
     )
 
-# Preprocesamiento de textos
+# Agrupar "mas <palabra>" → mas_palabra
+def agrupar_mas_con_palabra(texto):
+    return re.sub(r'\bmas (\w{3,})', r'mas_\1', texto)
+
+# Preprocesamiento general
 def preprocesar_textos(textos):
     textos_procesados = []
     for t in textos:
@@ -60,10 +64,14 @@ def preprocesar_textos(textos):
         t = t.lower()
         t = quitar_tildes(t)
 
+        # Agrupar expresiones definidas
         for expresion, reemplazo in EXPRESIONES_UNIDAS.items():
             t = t.replace(expresion, reemplazo)
 
-        t = t.replace("mas ", "mas_ ").replace(" más ", "mas_ ")
+        # Agrupar dinámicamente "mas <palabra>"
+        t = agrupar_mas_con_palabra(t)
+
+        # Eliminar signos y caracteres especiales
         t = re.sub(r'[^a-zA-Z_ñ\s]', '', t)
 
         palabras = t.split()
@@ -72,7 +80,7 @@ def preprocesar_textos(textos):
             textos_procesados.append(" ".join(palabras_filtradas))
     return textos_procesados
 
-# Clasificación de sentimiento
+# Sentimiento con VADER
 def sentimiento_vader(texto):
     if not isinstance(texto, str) or not texto.strip():
         return None
@@ -85,7 +93,7 @@ def sentimiento_vader(texto):
     else:
         return 'Neutro'
 
-# Análisis de temas (LDA)
+# Análisis de temas con LDA
 def codificar_temas(textos, n_topics=3, n_palabras=5):
     vectorizer = CountVectorizer(stop_words=spanish_stopwords, max_features=1000)
     X = vectorizer.fit_transform(textos)
@@ -98,7 +106,7 @@ def codificar_temas(textos, n_topics=3, n_palabras=5):
         temas.append(f"Tema {idx+1}: " + ", ".join(top_words))
     return temas, lda, vectorizer
 
-# Gráfico de distribución de sentimientos
+# Distribución de sentimientos
 def graficar_distribucion_sentimientos(data, columna):
     plt.figure(figsize=(6,4))
     sns.countplot(x=data, palette=['#e74c3c', '#95a5a6', '#2ecc71'])
@@ -118,7 +126,7 @@ def mostrar_nube(textos):
     plt.axis('off')
     st.pyplot(plt)
 
-# Gráfico de frecuencias de palabras
+# Frecuencias de palabras
 def graficar_frecuencias_palabras(textos, top_n=20):
     palabras = " ".join(textos).split()
     contador = Counter(palabras)
@@ -136,7 +144,7 @@ def graficar_frecuencias_palabras(textos, top_n=20):
     else:
         st.info("No hay suficientes palabras para mostrar frecuencias.")
 
-# ---------------- Streamlit App ----------------
+# ----------------- APP STREAMLIT -----------------
 
 st.title("Análisis de preguntas abiertas de encuesta académica")
 
@@ -183,5 +191,6 @@ if uploaded_file:
             st.info("No hay suficientes textos para análisis de temas (mínimo 10).")
 else:
     st.info("Carga un archivo para comenzar el análisis.")
+
 
 
