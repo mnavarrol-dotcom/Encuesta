@@ -11,6 +11,7 @@ from sklearn.decomposition import LatentDirichletAllocation
 from wordcloud import WordCloud
 import nltk
 import time
+from io import BytesIO
 
 # --- DESCARGAR STOPWORDS ---
 try:
@@ -110,7 +111,56 @@ def codificar_temas(textos, n_topics=3, n_palabras=5):
     for idx, topic in enumerate(lda.components_):
         top_words = [palabras[i].replace('_', ' ') for i in topic.argsort()[-n_palabras:][::-1]]
         temas.append(f"Tema {idx+1}: " + ", ".join(top_words))
-    return temas
+    return lda, vectorizer, temas
+
+def asignar_temas(lda, vectorizer, textos):
+    X = vectorizer.transform(textos)
+    distribuciones = lda.transform(X)
+    temas_pred = distribuciones.argmax(axis=1)
+    return temas_pred
+
+def analisis_temas_sentimientos(df, textos_proc, temas_pred, sentimientos, lista_temas):
+    data_analisis = pd.DataFrame({
+        'Texto': textos_proc,
+        'Tema': [lista_temas[i].split(':')[0] for i in temas_pred],
+        'Sentimiento': sentimientos
+    })
+    resumen_temas = (
+        data_analisis.groupby(['Tema', 'Sentimiento'])
+        .size()
+        .reset_index(name='Conteo')
+    )
+    total_por_tema = resumen_temas.groupby('Tema')['Conteo'].sum().to_dict()
+    resumen_temas['Porcentaje'] = resumen_temas.apply(lambda r: round((r['Conteo'] / total_por_tema[r['Tema']]) * 100, 1), axis=1)
+
+    # --- Visualización ---
+    st.subheader("📈 Distribución de sentimientos por tema")
+    plt.figure(figsize=(7, 4))
+    pivot_data = resumen_temas.pivot(index='Tema', columns='Sentimiento', values='Porcentaje').fillna(0)
+    pivot_data[['Positivo', 'Neutro', 'Negativo']] \
+        .plot(kind='bar', stacked=True, figsize=(7, 4), color=['#2ecc71','#95a5a6','#e74c3c'])
+    plt.ylabel('% de respuestas')
+    plt.title('Distribución porcentual de sentimientos por tema')
+    plt.legend(title='Sentimiento', bbox_to_anchor=(1.05, 1), loc='upper left')
+    st.pyplot(plt)
+    plt.clf()
+
+    st.subheader("📊 Tabla resumen de temas y sentimientos")
+    st.dataframe(resumen_temas.sort_values(['Tema', 'Sentimiento']))
+
+    # Botón para descargar
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        resumen_temas.to_excel(writer, index=False, sheet_name='Resumen_Temas_Sentimientos')
+        data_analisis.to_excel(writer, index=False, sheet_name='Detalle')
+    st.download_button(
+        label="📤 Descargar resumen en Excel",
+        data=output.getvalue(),
+        file_name="analisis_temas_sentimientos.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    return data_analisis
 
 def graficar_distribucion_sentimientos(data, columna):
     plt.figure(figsize=(4,3))
@@ -153,7 +203,6 @@ def filtrar_por_palabras(df, columna, palabras_busqueda):
         textos[p] = (ocurrencias > 0).sum()
     return df_filtrado, total, textos
 
-
 # --- INTERFAZ ---
 uploaded_file = st.file_uploader("📂 Carga tu archivo Excel (.xlsx)", type=["xlsx"])
 if uploaded_file:
@@ -190,27 +239,27 @@ if uploaded_file:
 
     columna_seleccionada = st.selectbox("Selecciona la pregunta a analizar:", columnas_objetivo)
 
-    # --- Descripciones por base ---
+    # Descripciones
     descripciones_por_base = {
         "3° y 4°": {
-            'PREG 24': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año, ¿qué cambios concretos propondrías en el programa que cursaste para que la preparación de la PAES sea más útil y eficaz el próximo año (2026)?",
-            'PREG 25': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede donde estudias para que la experiencia de los estudiantes sea mejor el año 2026?",
-            'PREG 26': "Pensando en el próximo año (2026), ¿qué mejora puntual harías en el Preuniversitario Pedro de Valdivia y por qué?"
+            'PREG 24': "¿Qué cambios propondrías en el programa para mejorar la preparación PAES?",
+            'PREG 25': "¿Qué innovaciones implementarías en la sede?",
+            'PREG 26': "¿Qué mejora puntual harías en el preuniversitario?"
         },
         "1° y 2°": {
-            'PREG 21': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año, ¿qué cambios concretos propondrías en el programa que cursaste para que la preparación de la PAES sea más útil y eficaz el próximo año (2026)?",
-            'PREG 22': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede donde estudias para que la experiencia de los estudiantes sea mejor el año 2026?",
-            'PREG 23': "Pensando en el próximo año (2026), ¿qué mejora puntual harías en el Preuniversitario Pedro de Valdivia y por qué?"
+            'PREG 21': "¿Qué cambios propondrías en el programa?",
+            'PREG 22': "¿Qué innovaciones implementarías en la sede?",
+            'PREG 23': "¿Qué mejora puntual harías?"
         },
         "ACP": {
-            'PREG 22': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año, ¿qué cambios concretos propondrías en el programa que cursaste para que la preparación de la PAES sea más útil y eficaz el próximo año (2026)?",
-            'PREG 23': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede donde estudias para que la experiencia de los estudiantes sea mejor el año 2026?",
-            'PREG 24': "Pensando en el próximo año (2026), ¿qué mejora puntual harías en el Preuniversitario Pedro de Valdivia y por qué?"
+            'PREG 22': "¿Qué cambios propondrías en el programa?",
+            'PREG 23': "¿Qué innovaciones implementarías en la sede?",
+            'PREG 24': "¿Qué mejora puntual harías?"
         },
         "GE": {
-            'PREG 25': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año, ¿qué cambios concretos propondrías en el programa que cursaste para que la preparación de la PAES sea más útil y eficaz el próximo año (2026)?",
-            'PREG 26': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede donde estudias para que la experiencia de los estudiantes sea mejor el año 2026?",
-            'PREG 27': "Pensando en el próximo año (2026), ¿qué mejora puntual harías en el Preuniversitario Pedro de Valdivia y por qué?"
+            'PREG 25': "¿Qué cambios propondrías en el programa?",
+            'PREG 26': "¿Qué innovaciones implementarías en la sede?",
+            'PREG 27': "¿Qué mejora puntual harías?"
         }
     }
 
@@ -240,37 +289,20 @@ if uploaded_file:
     progress.progress(75)
     if len(textos_proc) >= 10:
         st.subheader("Temas identificados")
-        temas = codificar_temas(textos_proc)
+        lda, vectorizer, temas = codificar_temas(textos_proc)
         for t in temas:
             st.write("• " + t)
 
         mostrar_nube(textos_proc)
         graficar_frecuencias_palabras(textos_proc)
+
+        # --- Nuevo análisis porcentual ---
+        sentimientos_validos = [sentimiento_vader(t) for t in textos_proc]
+        temas_pred = asignar_temas(lda, vectorizer, textos_proc)
+        analisis_temas_sentimientos(df, textos_proc, temas_pred, sentimientos_validos, temas)
+
     else:
         st.info("No hay suficientes textos para el análisis de temas (mínimo 10).")
-
-    progress.progress(90)
-    # --- FILTRO POR PALABRAS ---
-    st.subheader("🪶 Búsqueda de palabras clave")
-    palabras_entrada = st.text_input("Palabras separadas por comas (ej: examen, presencial, rápido)")
-    if st.button("Buscar palabras"):
-        if palabras_entrada.strip():
-            palabras_lista = [p.strip() for p in palabras_entrada.split(",")]
-            df_filtrado_palabras, total_ocurrencias, textos_con_palabra = filtrar_por_palabras(df, columna_seleccionada, palabras_lista)
-            if df_filtrado_palabras.empty:
-                st.warning("No se encontraron comentarios con esas palabras.")
-            else:
-                st.write(f"**{len(df_filtrado_palabras)} comentarios** contienen al menos una de las palabras buscadas.")
-                df_ocurrencias = pd.DataFrame({
-                    "Palabra": [p.replace('_',' ') for p in total_ocurrencias.keys()],
-                    "Total de apariciones": total_ocurrencias.values(),
-                    "Número de textos que la mencionan": [textos_con_palabra[p] for p in total_ocurrencias.keys()]
-                })
-                st.dataframe(df_ocurrencias)
-                st.write("### Comentarios filtrados:")
-                st.write(df_filtrado_palabras[[columna_seleccionada]])
-        else:
-            st.warning("Ingresa al menos una palabra para buscar.")
 
     progress.progress(100)
     st.success("✅ Análisis completado correctamente.")
