@@ -11,14 +11,12 @@ from sklearn.decomposition import LatentDirichletAllocation
 from wordcloud import WordCloud
 import nltk
 import time
-from io import BytesIO
 
 # --- DESCARGAR STOPWORDS ---
 try:
     nltk.data.find('corpora/stopwords')
 except LookupError:
     nltk.download('stopwords', quiet=True)
-
 from nltk.corpus import stopwords
 
 # --- CONFIGURACIÓN STREAMLIT ---
@@ -66,7 +64,8 @@ lexicon_cambios = {
 
 analyzer = SentimentIntensityAnalyzer()
 
-# --- FUNCIONES ---
+# --- FUNCIONES DE PROCESAMIENTO ---
+
 def quitar_tildes(texto):
     texto = unicodedata.normalize('NFD', texto)
     return ''.join([c for c in texto if unicodedata.category(c) != 'Mn'])
@@ -97,9 +96,14 @@ def sentimiento_vader(texto, es_pregunta_cambios=False):
     if es_pregunta_cambios:
         analyzer.lexicon.update(lexicon_cambios)
     score = analyzer.polarity_scores(texto)['compound']
-    if score >= 0.05: return 'Positivo'
-    elif score <= -0.05: return 'Negativo'
-    else: return 'Neutro'
+    if score >= 0.05:
+        return 'Positivo'
+    elif score <= -0.05:
+        return 'Negativo'
+    else:
+        return 'Neutro'
+
+# --- ANÁLISIS DE TEMAS Y SENTIMIENTOS ---
 
 def codificar_temas(textos, n_topics=3, n_palabras=5):
     vectorizer = CountVectorizer(stop_words=list(stopwords_totales), max_features=1000)
@@ -133,12 +137,10 @@ def analisis_temas_sentimientos(df, textos_proc, temas_pred, sentimientos, lista
     total_por_tema = resumen_temas.groupby('Tema')['Conteo'].sum().to_dict()
     resumen_temas['Porcentaje'] = resumen_temas.apply(lambda r: round((r['Conteo'] / total_por_tema[r['Tema']]) * 100, 1), axis=1)
 
-    # --- Visualización ---
     st.subheader("📈 Distribución de sentimientos por tema")
     plt.figure(figsize=(7, 4))
     pivot_data = resumen_temas.pivot(index='Tema', columns='Sentimiento', values='Porcentaje').fillna(0)
-    pivot_data[['Positivo', 'Neutro', 'Negativo']] \
-        .plot(kind='bar', stacked=True, figsize=(7, 4), color=['#2ecc71','#95a5a6','#e74c3c'])
+    pivot_data[['Positivo', 'Neutro', 'Negativo']].plot(kind='bar', stacked=True, figsize=(7, 4), color=['#2ecc71','#95a5a6','#e74c3c'])
     plt.ylabel('% de respuestas')
     plt.title('Distribución porcentual de sentimientos por tema')
     plt.legend(title='Sentimiento', bbox_to_anchor=(1.05, 1), loc='upper left')
@@ -148,19 +150,9 @@ def analisis_temas_sentimientos(df, textos_proc, temas_pred, sentimientos, lista
     st.subheader("📊 Tabla resumen de temas y sentimientos")
     st.dataframe(resumen_temas.sort_values(['Tema', 'Sentimiento']))
 
-    # Botón para descargar
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        resumen_temas.to_excel(writer, index=False, sheet_name='Resumen_Temas_Sentimientos')
-        data_analisis.to_excel(writer, index=False, sheet_name='Detalle')
-    st.download_button(
-        label="📤 Descargar resumen en Excel",
-        data=output.getvalue(),
-        file_name="analisis_temas_sentimientos.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
     return data_analisis
+
+# --- VISUALIZACIONES ---
 
 def graficar_distribucion_sentimientos(data, columna):
     plt.figure(figsize=(4,3))
@@ -190,6 +182,7 @@ def graficar_frecuencias_palabras(textos):
     st.pyplot(plt)
     plt.clf()
 
+# --- FILTRO POR PALABRAS ---
 def filtrar_por_palabras(df, columna, palabras_busqueda):
     palabras_proc = [quitar_tildes(p.strip().lower()) for p in palabras_busqueda if p.strip()]
     if not palabras_proc:
@@ -205,6 +198,7 @@ def filtrar_por_palabras(df, columna, palabras_busqueda):
 
 # --- INTERFAZ ---
 uploaded_file = st.file_uploader("📂 Carga tu archivo Excel (.xlsx)", type=["xlsx"])
+
 if uploaded_file:
     progress = st.progress(0)
     df = pd.read_excel(uploaded_file)
@@ -239,39 +233,37 @@ if uploaded_file:
 
     columna_seleccionada = st.selectbox("Selecciona la pregunta a analizar:", columnas_objetivo)
 
-    # Descripciones
     descripciones_por_base = {
         "3° y 4°": {
-            'PREG 24': "¿Qué cambios propondrías en el programa para mejorar la preparación PAES?",
-            'PREG 25': "¿Qué innovaciones implementarías en la sede?",
-            'PREG 26': "¿Qué mejora puntual harías en el preuniversitario?"
+            'PREG 24': "Según tu experiencia ... útil y eficaz el próximo año (2026)?",
+            'PREG 25': "Desde tu experiencia ... mejor el año 2026?",
+            'PREG 26': "Pensando en el próximo año (2026) ..."
         },
         "1° y 2°": {
-            'PREG 21': "¿Qué cambios propondrías en el programa?",
-            'PREG 22': "¿Qué innovaciones implementarías en la sede?",
-            'PREG 23': "¿Qué mejora puntual harías?"
+            'PREG 21': "Según tu experiencia ... eficaz el próximo año (2026)?",
+            'PREG 22': "Desde tu experiencia ... mejor el año 2026?",
+            'PREG 23': "Pensando en el próximo año (2026) ..."
         },
         "ACP": {
-            'PREG 22': "¿Qué cambios propondrías en el programa?",
-            'PREG 23': "¿Qué innovaciones implementarías en la sede?",
-            'PREG 24': "¿Qué mejora puntual harías?"
+            'PREG 22': "Según tu experiencia ... eficaz el próximo año (2026)?",
+            'PREG 23': "Desde tu experiencia ... mejor el año 2026?",
+            'PREG 24': "Pensando en el próximo año (2026) ..."
         },
         "GE": {
-            'PREG 25': "¿Qué cambios propondrías en el programa?",
-            'PREG 26': "¿Qué innovaciones implementarías en la sede?",
-            'PREG 27': "¿Qué mejora puntual harías?"
+            'PREG 25': "Según tu experiencia ... eficaz el próximo año (2026)?",
+            'PREG 26': "Desde tu experiencia ... mejor el año 2026?",
+            'PREG 27': "Pensando en el próximo año (2026) ..."
         }
     }
 
     if tipo_base in descripciones_por_base and columna_seleccionada in descripciones_por_base[tipo_base]:
         st.info(f"**Descripción:**\n\n{descripciones_por_base[tipo_base][columna_seleccionada]}")
 
-    # Filtros
+    # --- Filtros ---
     if 'SEDE' in df.columns:
         sede_sel = st.selectbox("Filtrar por SEDE:", ["Todos"] + sorted(df['SEDE'].dropna().unique().tolist()))
         if sede_sel != "Todos":
             df = df[df['SEDE'] == sede_sel]
-
     if 'NIVEL' in df.columns:
         nivel_sel = st.selectbox("Filtrar por NIVEL:", ["Todos"] + sorted(df['NIVEL'].dropna().unique().tolist()))
         if nivel_sel != "Todos":
@@ -282,11 +274,11 @@ if uploaded_file:
 
     es_cambios = 'cambio' in columna_seleccionada.lower()
     df[columna_seleccionada + '_sentimiento'] = df[columna_seleccionada].apply(lambda x: sentimiento_vader(x, es_cambios))
-
     graficar_distribucion_sentimientos(df[columna_seleccionada + '_sentimiento'], columna_seleccionada)
-    textos_proc = preprocesar_textos(df[columna_seleccionada])
 
+    textos_proc = preprocesar_textos(df[columna_seleccionada])
     progress.progress(75)
+
     if len(textos_proc) >= 10:
         st.subheader("Temas identificados")
         lda, vectorizer, temas = codificar_temas(textos_proc)
@@ -296,15 +288,39 @@ if uploaded_file:
         mostrar_nube(textos_proc)
         graficar_frecuencias_palabras(textos_proc)
 
-        # --- Nuevo análisis porcentual ---
         sentimientos_validos = [sentimiento_vader(t) for t in textos_proc]
         temas_pred = asignar_temas(lda, vectorizer, textos_proc)
         analisis_temas_sentimientos(df, textos_proc, temas_pred, sentimientos_validos, temas)
-
     else:
         st.info("No hay suficientes textos para el análisis de temas (mínimo 10).")
 
+    progress.progress(90)
+
+    # --- FILTRO POR PALABRAS ---
+    st.subheader("🪶 Búsqueda de palabras clave")
+    palabras_entrada = st.text_input("Palabras separadas por comas (ej: examen, presencial, rápido)")
+    if st.button("Buscar palabras"):
+        if palabras_entrada.strip():
+            palabras_lista = [p.strip() for p in palabras_entrada.split(",")]
+            df_filtrado_palabras, total_ocurrencias, textos_con_palabra = filtrar_por_palabras(df, columna_seleccionada, palabras_lista)
+            if df_filtrado_palabras.empty:
+                st.warning("No se encontraron comentarios con esas palabras.")
+            else:
+                st.write(f"**{len(df_filtrado_palabras)} comentarios** contienen al menos una de las palabras buscadas.")
+                df_ocurrencias = pd.DataFrame({
+                    "Palabra": [p.replace('_',' ') for p in total_ocurrencias.keys()],
+                    "Total de apariciones": total_ocurrencias.values(),
+                    "Número de textos que la mencionan": [textos_con_palabra[p] for p in total_ocurrencias.keys()]
+                })
+                st.dataframe(df_ocurrencias)
+                st.write("### Comentarios filtrados:")
+                st.write(df_filtrado_palabras[[columna_seleccionada]])
+        else:
+            st.warning("Ingresa al menos una palabra para buscar.")
+
     progress.progress(100)
     st.success("✅ Análisis completado correctamente.")
+
 else:
     st.info("📂 Carga un archivo Excel para comenzar el análisis.")
+
