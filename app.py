@@ -134,8 +134,14 @@ def graficar_distribucion_sentimientos(data, columna):
 
 def mostrar_nube(textos):
     texto_unido = " ".join(textos)
+    if not texto_unido.strip():
+        st.info("No hay texto suficiente para generar la nube de palabras.")
+        return
     wordcloud = WordCloud(stopwords=stopwords_totales, background_color="white",
                           width=800, height=400).generate(texto_unido)
+    if len(wordcloud.words_) == 0:
+        st.info("No se encontraron palabras válidas para la nube de palabras.")
+        return
     plt.figure(figsize=(10,5))
     plt.imshow(wordcloud, interpolation='bilinear')
     plt.axis('off')
