@@ -228,7 +228,10 @@ if uploaded_file:
 
     # --- SELECCIÓN DE PREGUNTA ---
     columna_seleccionada = st.selectbox("Selecciona la pregunta a analizar:", columnas_objetivo)
-    # --- Descripciones adaptadas a cada base ---
+# --- Selector de columna según base detectada ---
+columna_seleccionada = st.selectbox("Selecciona la pregunta a analizar:", columnas_objetivo)
+
+# --- Descripciones adaptadas a cada base ---
 descripciones_por_base = {
     "3° y 4°": {
         'PREG 24': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año, ¿qué cambios concretos propondrías en el programa que cursaste (Competencia Lectora, Matemática, Ciencias, Historia, etc.) para que la preparación de la PAES sea más útil y eficaz el próximo año (2026)? (pregunta abierta)",
@@ -245,12 +248,27 @@ descripciones_por_base = {
         'PREG 23': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede donde estudias para que la experiencia de los estudiantes sea mejor el año 2026? (pregunta abierta)",
         'PREG 24': "Pensando en el próximo año (2026), ¿qué mejora puntual harías en el Preuniversitario Pedro de Valdivia y por qué? (pregunta abierta)"
     },
-    "GE o Dynamic": {
+    "GE": {
+        'PREG 25': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año, ¿qué cambios concretos propondrías en el programa que cursaste (Competencia Lectora, Matemática, Ciencias, Historia, etc.) para que la preparación de la PAES sea más útil y eficaz el próximo año (2026)? (pregunta abierta)",
+        'PREG 26': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede donde estudias para que la experiencia de los estudiantes sea mejor el año 2026? (pregunta abierta)",
+        'PREG 27': "Pensando en el próximo año (2026), ¿qué mejora puntual harías en el Preuniversitario Pedro de Valdivia y por qué? (pregunta abierta)"
+    },
+    "Dynamic": {
         'PREG 25': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año, ¿qué cambios concretos propondrías en el programa que cursaste (Competencia Lectora, Matemática, Ciencias, Historia, etc.) para que la preparación de la PAES sea más útil y eficaz el próximo año (2026)? (pregunta abierta)",
         'PREG 26': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede donde estudias para que la experiencia de los estudiantes sea mejor el año 2026? (pregunta abierta)",
         'PREG 27': "Pensando en el próximo año (2026), ¿qué mejora puntual harías en el Preuniversitario Pedro de Valdivia y por qué? (pregunta abierta)"
     }
 }
+
+# --- Mostrar descripción correspondiente ---
+if tipo_base in descripciones_por_base:
+    descripciones = descripciones_por_base[tipo_base]
+    if columna_seleccionada in descripciones:
+        st.info(f"**Descripción de la pregunta seleccionada:**\n\n{descripciones[columna_seleccionada]}")
+    else:
+        st.warning("No hay una descripción definida para esta pregunta dentro de esta base.")
+else:
+    st.warning("No se encontró un conjunto de descripciones asociado a esta base.")
 
 # --- Mostrar descripción correspondiente ---
 if tipo_base in descripciones_por_base:
