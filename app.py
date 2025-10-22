@@ -198,7 +198,7 @@ if uploaded_file:
         tipo_detectado = "3° y 4°"
 
     # --- SELECCIÓN DE BASE ---
-    opciones = ["3° y 4°", "1° y 2°", "ACP", "GE", "Dynamic"]
+    opciones = ["3° y 4°", "1° y 2°", "ACP", "GE"]
     tipo_base = st.selectbox("Selecciona el tipo de base:", opciones, index=opciones.index(tipo_detectado))
 
     # --- COLUMNAS SEGÚN BASE ---
@@ -207,7 +207,6 @@ if uploaded_file:
         "1° y 2°": ['PREG 21', 'PREG 22', 'PREG 23'],
         "ACP": ['PREG 22', 'PREG 23', 'PREG 24'],
         "GE": ['PREG 25', 'PREG 26', 'PREG 27'],
-        "Dynamic": ['PREG 25', 'PREG 26', 'PREG 27']
     }
 
     # --- VALIDAR COLUMNAS EXISTENTES ---
@@ -229,6 +228,39 @@ if uploaded_file:
 
     # --- SELECCIÓN DE PREGUNTA ---
     columna_seleccionada = st.selectbox("Selecciona la pregunta a analizar:", columnas_objetivo)
+    # --- Descripciones adaptadas a cada base ---
+descripciones_por_base = {
+    "3° y 4°": {
+        'PREG 24': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año, ¿qué cambios concretos propondrías en el programa que cursaste (Competencia Lectora, Matemática, Ciencias, Historia, etc.) para que la preparación de la PAES sea más útil y eficaz el próximo año (2026)? (pregunta abierta)",
+        'PREG 25': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede donde estudias para que la experiencia de los estudiantes sea mejor el año 2026? (pregunta abierta)",
+        'PREG 26': "Pensando en el próximo año (2026), ¿qué mejora puntual harías en el Preuniversitario Pedro de Valdivia y por qué? (pregunta abierta)"
+    },
+    "1° y 2°": {
+        'PREG 21': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año, ¿qué cambios concretos propondrías en el programa que cursaste (Competencia Lectora, Matemática, Ciencias, Historia, etc.) para que la preparación de la PAES sea más útil y eficaz el próximo año (2026)? (pregunta abierta)",
+        'PREG 22': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede donde estudias para que la experiencia de los estudiantes sea mejor el año 2026? (pregunta abierta)",
+        'PREG 23': "Pensando en el próximo año (2026), ¿qué mejora puntual harías en el Preuniversitario Pedro de Valdivia y por qué? (pregunta abierta)"
+    },
+    "ACP": {
+        'PREG 22': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año, ¿qué cambios concretos propondrías en el programa que cursaste (Competencia Lectora, Matemática, Ciencias, Historia, etc.) para que la preparación de la PAES sea más útil y eficaz el próximo año (2026)? (pregunta abierta)",
+        'PREG 23': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede donde estudias para que la experiencia de los estudiantes sea mejor el año 2026? (pregunta abierta)",
+        'PREG 24': "Pensando en el próximo año (2026), ¿qué mejora puntual harías en el Preuniversitario Pedro de Valdivia y por qué? (pregunta abierta)"
+    },
+    "GE o Dynamic": {
+        'PREG 25': "Según tu experiencia en el Preuniversitario Pedro de Valdivia este año, ¿qué cambios concretos propondrías en el programa que cursaste (Competencia Lectora, Matemática, Ciencias, Historia, etc.) para que la preparación de la PAES sea más útil y eficaz el próximo año (2026)? (pregunta abierta)",
+        'PREG 26': "Desde tu experiencia, ¿qué cambios o innovaciones deberían implementarse respecto de la sede donde estudias para que la experiencia de los estudiantes sea mejor el año 2026? (pregunta abierta)",
+        'PREG 27': "Pensando en el próximo año (2026), ¿qué mejora puntual harías en el Preuniversitario Pedro de Valdivia y por qué? (pregunta abierta)"
+    }
+}
+
+# --- Mostrar descripción correspondiente ---
+if tipo_base in descripciones_por_base:
+    descripciones = descripciones_por_base[tipo_base]
+    if columna_seleccionada in descripciones:
+        st.info(f"**Descripción de la pregunta seleccionada:**\n\n{descripciones[columna_seleccionada]}")
+    else:
+        st.warning("No hay una descripción definida para esta pregunta dentro de esta base.")
+else:
+    st.warning("No se encontró un conjunto de descripciones asociado a esta base.")
     st.divider()
     st.subheader(f"🔍 Análisis de {columna_seleccionada}")
 
