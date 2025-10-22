@@ -66,7 +66,7 @@ def mostrar_nube(textos):
     plt.axis('off')
     st.pyplot(plt)
 
-st.title("Dashboard de Sentimientos y Temas")
+st.title("Análsis de preguntas abiertas de encuesta académica")
 
 uploaded_file = st.file_uploader("Carga tu archivo Excel (.xlsx)", type=["xlsx"])
 if uploaded_file:
