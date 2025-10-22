@@ -10,10 +10,6 @@ import nltk
 import re
 import unicodedata
 from collections import Counter
-import numpy as np
-from scipy.cluster.hierarchy import linkage, leaves_list
-from scipy.spatial.distance import pdist
-import plotly.express as px
 
 nltk.download('stopwords')
 from nltk.corpus import stopwords
