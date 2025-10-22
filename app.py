@@ -16,7 +16,7 @@ from nltk.corpus import stopwords
 
 # Stopwords base y personalizadas
 spanish_stopwords = stopwords.words('spanish')
-stopwords_personalizadas = {'creo', 'hacer', 'siento', 'verdad', 'tan', 'tal', 'pdv', 'asi', 'sido','haria'}
+stopwords_personalizadas = {'creo', 'hacer', 'siento', 'verdad', 'tan', 'tal', 'pdv', 'asi', 'sido','haria', 'hace'}
 stopwords_totales = set(spanish_stopwords) | stopwords_personalizadas
 
 # Expresiones que se unen para no separarlas
@@ -30,7 +30,12 @@ EXPRESIONES_UNIDAS = {
     "material didáctico": "material_didactico",
     "tutor virtual": "tutor_virtual",
     "apoyo docente": "apoyo_docente",
-    "evaluación continua": "evaluacion_continua"
+    "evaluación continua": "evaluacion_continua",
+    "mas didacticas": "mas_didacticas",
+    "mas actividades" : "mas_actividades",
+    "mas apoyo": "mas_apoyo",
+    "ensayos presenciales: "ensayos_presenciales",
+    "ensayos virtuales: "ensayos_virtuales",
 }
 
 # Lexicon base de VADER en español
