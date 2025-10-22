@@ -288,6 +288,34 @@ if uploaded_file:
         else:
             st.info("No hay suficientes textos para análisis de temas (mínimo 10).")
 
+        # --- NUEVO: ANÁLISIS DE CONCURRENCIA ---
+        st.subheader("🔍 Análisis de concurrencia de palabras")
+
+        # Filtro por categoría (usa columnas tipo texto distintas a las preguntas)
+        columnas_categoricas = [c for c in df.columns if df[c].dtype == 'object' and c not in columnas]
+        if columnas_categoricas:
+            categoria_seleccionada = st.selectbox("Selecciona una categoría para filtrar:", ["Ninguna"] + columnas_categoricas)
+        else:
+            categoria_seleccionada = "Ninguna"
+
+        if categoria_seleccionada != "Ninguna":
+            categorias_unicas = df[categoria_seleccionada].dropna().unique().tolist()
+            categoria_valor = st.selectbox(f"Selecciona un valor de {categoria_seleccionada}:", categorias_unicas)
+            df_filtrado_categoria = df[df[categoria_seleccionada] == categoria_valor]
+            textos_filtrados_cat = preprocesar_textos(df_filtrado_categoria[columna_seleccionada])
+
+            if len(textos_filtrados_cat) >= 5:
+                coocurrencia_df = calcular_coocurrencia(textos_filtrados_cat)
+                graficar_mapa_calor_coocurrencia(coocurrencia_df, f"Coocurrencia - {categoria_seleccionada}: {categoria_valor}")
+            else:
+                st.info("No hay suficientes textos para analizar esta categoría.")
+        else:
+            if len(textos_procesados) >= 5:
+                coocurrencia_df = calcular_coocurrencia(textos_procesados)
+                graficar_mapa_calor_coocurrencia(coocurrencia_df)
+            else:
+                st.info("No hay suficientes textos para análisis de coocurrencia.")
+                
         # Nuevo filtro por palabras clave
         st.subheader("Búsqueda de palabras clave en los comentarios")
         palabras_entrada = st.text_input("Ingresa palabras separadas por comas para buscar (ej: examen, presencial, rápido)")
