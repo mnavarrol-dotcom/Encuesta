@@ -111,7 +111,7 @@ def graficar_distribucion_sentimientos(data, columna):
     plt.figure(figsize=(6,4))
     palette = {'Negativo': '#e74c3c', 'Neutro': '#95a5a6', 'Positivo': '#2ecc71'}
     sns.countplot(x=data, palette=palette)
-    plt.title(f"Distribución de Sentimientos - {columna}")
+    plt.title(f"Distribución Sentimientos - {columna}")
     plt.tight_layout()
     st.pyplot(plt)
     plt.clf()
@@ -160,44 +160,42 @@ def graficar_mapa_calor_coocurrencia(coocurrencia_df, titulo="Mapa de Calor de C
     plt.clf()
 
 # -------------------------------
-# STREAMLIT APP
+# INTERFAZ STREAMLIT
 # -------------------------------
-st.title("📊 Análisis de preguntas abiertas académicas")
+st.title("📊 Análisis de Preguntas Abiertas Académicas")
 
-uploaded_file = st.file_uploader("Carga tu archivo Excel (.xlsx)", type=["xlsx"])
+uploaded_file = st.file_uploader("📂 Carga tu archivo Excel (.xlsx)", type=["xlsx"])
+
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
     nombre = uploaded_file.name.lower()
 
-    # --- Filtros por SEDE y NIVEL ---
-    if "SEDE" in df.columns and "NIVEL" in df.columns:
-        col1, col2 = st.columns(2)
-        with col1:
-            sede_sel = st.multiselect("Filtrar por SEDE:", sorted(df["SEDE"].dropna().unique()))
-        with col2:
-            nivel_sel = st.multiselect("Filtrar por NIVEL:", sorted(df["NIVEL"].dropna().unique()))
-        
-        if sede_sel:
-            df = df[df["SEDE"].isin(sede_sel)]
-        if nivel_sel:
-            df = df[df["NIVEL"].isin(nivel_sel)]
-
-    # --- Detección automática del tipo de base ---
+    # Detección automática del tipo de base
     if "acp" in nombre:
-        tipo_detectado = "ACP"
+        tipo_base = "ACP"
     elif "ge" in nombre:
-        tipo_detectado = "GE"
+        tipo_base = "GE"
     elif "dynamic" in nombre:
-        tipo_detectado = "Dynamic"
-    elif "3" in nombre or "4" in nombre:
-        tipo_detectado = "3° y 4°"
-    elif "1" in nombre or "2" in nombre:
-        tipo_detectado = "1° y 2°"
+        tipo_base = "Dynamic"
+    elif any(c in nombre for c in ["3", "cuarto", "tercero"]):
+        tipo_base = "3° y 4°"
+    elif any(c in nombre for c in ["1", "2", "primero", "segundo"]):
+        tipo_base = "1° y 2°"
     else:
-        tipo_detectado = "3° y 4°"
+        # Detectar por columnas presentes
+        cols = list(df.columns)
+        if 'PREG 24' in cols and 'PREG 25' in cols:
+            tipo_base = "3° y 4°"
+        elif 'PREG 21' in cols and 'PREG 22' in cols:
+            tipo_base = "1° y 2°"
+        elif 'PREG 22' in cols and 'PREG 23' in cols:
+            tipo_base = "ACP"
+        elif 'PREG 25' in cols and 'PREG 26' in cols:
+            tipo_base = "GE"
+        else:
+            tipo_base = "Desconocida"
 
-    opciones = ["3° y 4°", "1° y 2°", "ACP", "GE", "Dynamic"]
-    tipo_base = st.selectbox("Selecciona el tipo de base:", opciones, index=opciones.index(tipo_detectado))
+    st.success(f"✅ Tipo de base detectado automáticamente: **{tipo_base}**")
 
     columnas_por_base = {
         "3° y 4°": ['PREG 24', 'PREG 25', 'PREG 26'],
@@ -207,15 +205,25 @@ if uploaded_file:
         "Dynamic": ['PREG 25', 'PREG 26', 'PREG 27']
     }
 
-    columnas = [c for c in columnas_por_base[tipo_base] if c in df.columns]
-
-    if not columnas:
-        st.error(f"No se encontraron las columnas esperadas para {tipo_base}.")
+    columnas_disponibles = [c for c in columnas_por_base.get(tipo_base, []) if c in df.columns]
+    if not columnas_disponibles:
+        st.warning("No se detectaron columnas válidas de preguntas abiertas en esta base.")
     else:
-        st.subheader("📋 Selección de pregunta para análisis")
-        columna_sel = st.selectbox("Elige una columna para analizar:", ["Todas"] + columnas)
+        columna_sel = st.selectbox("Selecciona la pregunta a analizar:", ["Todas"] + columnas_disponibles)
 
-        columnas_a_analizar = columnas if columna_sel == "Todas" else [columna_sel]
+        # Filtros SEDE y NIVEL
+        if "SEDE" in df.columns and "NIVEL" in df.columns:
+            col1, col2 = st.columns(2)
+            with col1:
+                sede_sel = st.multiselect("Filtrar por SEDE:", sorted(df["SEDE"].dropna().unique()))
+            with col2:
+                nivel_sel = st.multiselect("Filtrar por NIVEL:", sorted(df["NIVEL"].dropna().unique()))
+            if sede_sel:
+                df = df[df["SEDE"].isin(sede_sel)]
+            if nivel_sel:
+                df = df[df["NIVEL"].isin(nivel_sel)]
+
+        columnas_a_analizar = columnas_disponibles if columna_sel == "Todas" else [columna_sel]
 
         for col in columnas_a_analizar:
             st.markdown(f"### 🔍 Análisis de {col}")
@@ -226,17 +234,17 @@ if uploaded_file:
             textos = preprocesar_textos(df[col])
             if len(textos) >= 10:
                 temas = codificar_temas(textos)
-                st.write("Temas principales:**")
+                st.write("**Temas principales:**")
                 for t in temas:
                     st.write("-", t)
-                st.subheader("Nube de palabras")
+                st.subheader("☁️ Nube de palabras")
                 mostrar_nube(textos)
-                st.subheader("Frecuencia de palabras")
+                st.subheader("📈 Frecuencia de palabras")
                 graficar_frecuencias_palabras(textos)
-                st.subheader("Mapa de calor de coocurrencia")
+                st.subheader("🔥 Mapa de calor de coocurrencia")
                 cooc = calcular_coocurrencia(textos)
                 graficar_mapa_calor_coocurrencia(cooc)
             else:
                 st.info(f"No hay suficientes textos en {col} para análisis (mínimo 10).")
 else:
-    st.info("Carga un archivo para comenzar el análisis.")
+    st.info("Por favor, carga un archivo Excel para comenzar el análisis.")
