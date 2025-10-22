@@ -154,29 +154,35 @@ def filtrar_por_palabras(df, columna, palabras_busqueda):
 
 
 # --- INTERFAZ ---
-uploaded_file = st.file_uploader("📥 Carga tu archivo Excel (.xlsx)", type=["xlsx"])
+uploaded_file = st.file_uploader("Carga tu archivo Excel (.xlsx)", type=["xlsx"])
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
+    nombre = uploaded_file.name.lower()
 
-    columnas = df.columns
-    if {'PREG 24','PREG 25','PREG 26'}.issubset(columnas):
-        tipo_base = "3° y 4°"
-        columnas_objetivo = ['PREG 24','PREG 25','PREG 26']
-    elif {'PREG 21','PREG 22','PREG 23'}.issubset(columnas):
-        tipo_base = "1° y 2°"
-        columnas_objetivo = ['PREG 21','PREG 22','PREG 23']
-    elif {'PREG 22','PREG 23','PREG 24'}.issubset(columnas):
-        tipo_base = "ACP"
-        columnas_objetivo = ['PREG 22','PREG 23','PREG 24']
-    elif {'PREG 25','PREG 26','PREG 27'}.issubset(columnas):
-        tipo_base = "GE o Dynamic"
-        columnas_objetivo = ['PREG 25','PREG 26','PREG 27']
+    # Detección automática de base
+    if "acp" in nombre:
+        tipo_detectado = "ACP"
+    elif "ge" in nombre:
+        tipo_detectado = "GE"
+    elif "dynamic" in nombre:
+        tipo_detectado = "Dynamic"
+    elif "3" in nombre or "4" in nombre:
+        tipo_detectado = "3° y 4°"
+    elif "1" in nombre or "2" in nombre:
+        tipo_detectado = "1° y 2°"
     else:
-        st.error("No se pudo identificar el tipo de base.")
-        st.stop()
+        tipo_detectado = "3° y 4°"
 
-    st.success(f"Base detectada automáticamente: **{tipo_base}**")
+    opciones = ["3° y 4°", "1° y 2°", "ACP", "GE", "Dynamic"]
+    tipo_base = st.selectbox("Selecciona el tipo de base:", opciones, index=opciones.index(tipo_detectado))
 
+    columnas_por_base = {
+        "3° y 4°": ['PREG 24', 'PREG 25', 'PREG 26'],
+        "1° y 2°": ['PREG 21', 'PREG 22', 'PREG 23'],
+        "ACP": ['PREG 22', 'PREG 23', 'PREG 24'],
+        "GE": ['PREG 25', 'PREG 26', 'PREG 27'],
+        "Dynamic": ['PREG 25', 'PREG 26', 'PREG 27']
+    }
     # Filtros SEDE / NIVEL
     if 'SEDE' in df.columns:
         sede_sel = st.selectbox("Filtrar por SEDE:", ["Todos"] + sorted(df['SEDE'].dropna().unique().tolist()))
