@@ -232,3 +232,4 @@ if uploaded_file:
             st.warning("Ingresa al menos una palabra para buscar.")
 else:
     st.info("📂 Carga un archivo Excel para comenzar el análisis.")
+
