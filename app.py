@@ -257,10 +257,25 @@ if uploaded_file:
     if nivel_sel:
         df = df[df["NIVEL"].isin(nivel_sel)]
 
-    # Modo rápido
-    modo_rapido = st.checkbox("⚡ Activar modo rápido (solo primeras 500 filas)")
-    if modo_rapido:
-        df = df.head(500)
+     # --- FILTRO POR PALABRAS ---
+    st.subheader("🔍 Búsqueda de palabras clave")
+    palabras_input = st.text_input("Ingresa palabras separadas por coma (ej: examen, presencial, rápido)")
+    if st.button("Buscar palabras"):
+        if palabras_input.strip():
+            palabras_lista = [p.strip() for p in palabras_input.split(",")]
+            df_filt, total, textos = filtrar_por_palabras(df, columna_sel, palabras_lista)
+            if df_filt.empty:
+                st.warning("No se encontraron comentarios que contengan esas palabras.")
+            else:
+                st.write(f"Se encontraron {len(df_filt)} comentarios con al menos una palabra buscada.")
+                df_oc = pd.DataFrame({
+                    "Palabra": [p.replace('_',' ') for p in total.keys()],
+                    "Total apariciones": total.values(),
+                    "Textos que la mencionan": [textos[p] for p in total.keys()]
+                })
+                st.dataframe(df_oc)
+                st.write("### Comentarios filtrados:")
+                st.write(df_filt[[columna_sel]])
 
     st.subheader(f"📊 Análisis de {preg_sel}")
 
