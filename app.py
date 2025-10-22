@@ -159,7 +159,7 @@ if uploaded_file:
     df = pd.read_excel(uploaded_file)
     nombre = uploaded_file.name.lower()
 
-    # Detección automática de base
+    # --- DETECCIÓN AUTOMÁTICA DE BASE ---
     if "acp" in nombre:
         tipo_detectado = "ACP"
     elif "ge" in nombre:
@@ -173,9 +173,11 @@ if uploaded_file:
     else:
         tipo_detectado = "3° y 4°"
 
+    # --- SELECCIÓN DE BASE ---
     opciones = ["3° y 4°", "1° y 2°", "ACP", "GE", "Dynamic"]
     tipo_base = st.selectbox("Selecciona el tipo de base:", opciones, index=opciones.index(tipo_detectado))
 
+    # --- COLUMNAS SEGÚN BASE ---
     columnas_por_base = {
         "3° y 4°": ['PREG 24', 'PREG 25', 'PREG 26'],
         "1° y 2°": ['PREG 21', 'PREG 22', 'PREG 23'],
@@ -183,27 +185,41 @@ if uploaded_file:
         "GE": ['PREG 25', 'PREG 26', 'PREG 27'],
         "Dynamic": ['PREG 25', 'PREG 26', 'PREG 27']
     }
-    # Filtros SEDE / NIVEL
+
+    # --- VALIDAR COLUMNAS EXISTENTES ---
+    columnas_objetivo = [c for c in columnas_por_base[tipo_base] if c in df.columns]
+    if not columnas_objetivo:
+        st.error(f"No se encontraron columnas válidas para la base seleccionada: {tipo_base}")
+        st.stop()
+
+    # --- FILTROS SEDE / NIVEL ---
     if 'SEDE' in df.columns:
         sede_sel = st.selectbox("Filtrar por SEDE:", ["Todos"] + sorted(df['SEDE'].dropna().unique().tolist()))
         if sede_sel != "Todos":
             df = df[df['SEDE'] == sede_sel]
+
     if 'NIVEL' in df.columns:
         nivel_sel = st.selectbox("Filtrar por NIVEL:", ["Todos"] + sorted(df['NIVEL'].dropna().unique().tolist()))
         if nivel_sel != "Todos":
             df = df[df['NIVEL'] == nivel_sel]
 
+    # --- SELECCIÓN DE PREGUNTA ---
+    columna_seleccionada = st.selectbox("Selecciona la pregunta a analizar:", columnas_objetivo)
     st.divider()
     st.subheader(f"🔍 Análisis de {columna_seleccionada}")
 
+    # --- ANÁLISIS DE SENTIMIENTO ---
     es_cambios = 'cambio' in columna_seleccionada.lower()
-    df[columna_seleccionada + '_sentimiento'] = df[columna_seleccionada].apply(lambda x: sentimiento_vader(x, es_cambios))
+    df[columna_seleccionada + '_sentimiento'] = df[columna_seleccionada].apply(
+        lambda x: sentimiento_vader(x, es_cambios)
+    )
 
     graficar_distribucion_sentimientos(df[columna_seleccionada + '_sentimiento'], columna_seleccionada)
     textos_proc = preprocesar_textos(df[columna_seleccionada])
 
+    # --- ANÁLISIS DE TEMAS ---
     if len(textos_proc) >= 10:
-        st.subheader("Temas identificados")
+        st.subheader("🧩 Temas identificados")
         temas = codificar_temas(textos_proc)
         for t in temas:
             st.write("• " + t)
@@ -219,13 +235,15 @@ if uploaded_file:
     if st.button("Buscar palabras"):
         if palabras_entrada.strip():
             palabras_lista = [p.strip() for p in palabras_entrada.split(",")]
-            df_filtrado_palabras, total_ocurrencias, textos_con_palabra = filtrar_por_palabras(df, columna_seleccionada, palabras_lista)
+            df_filtrado_palabras, total_ocurrencias, textos_con_palabra = filtrar_por_palabras(
+                df, columna_seleccionada, palabras_lista
+            )
             if df_filtrado_palabras.empty:
                 st.warning("No se encontraron comentarios con esas palabras.")
             else:
                 st.write(f"**{len(df_filtrado_palabras)} comentarios** contienen al menos una de las palabras buscadas.")
                 df_ocurrencias = pd.DataFrame({
-                    "Palabra": [p.replace('_',' ') for p in total_ocurrencias.keys()],
+                    "Palabra": [p.replace('_', ' ') for p in total_ocurrencias.keys()],
                     "Total de apariciones": total_ocurrencias.values(),
                     "Número de textos que la mencionan": [textos_con_palabra[p] for p in total_ocurrencias.keys()]
                 })
