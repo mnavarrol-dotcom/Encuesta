@@ -51,7 +51,6 @@ lexicon_cambios = {
     'sugerencia': 1.0, 'sugerencias': 1.0, 'más_apoyo': 2.0, 'más_claridad': 1.5,
     'flexible': 1.5, 'dificultad': -2.0, 'complicado': -2.0,
 }
-analyzer.lexicon.update(spanish_lexicon)
 
 # Eliminar tildes
 def quitar_tildes(texto):
