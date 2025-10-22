@@ -227,10 +227,6 @@ if uploaded_file:
     if nivel_sel:
         df = df[df["NIVEL"].isin(nivel_sel)]
 
-    # --- Modo rápido ---
-    modo_rapido = st.checkbox("⚡ Activar modo rápido (solo primeras 500 filas)")
-    if modo_rapido:
-        df = df.head(500)
 
     st.subheader(f"📊 Análisis de {preg_sel}")
 
