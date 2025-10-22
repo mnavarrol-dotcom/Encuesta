@@ -164,6 +164,27 @@ def graficar_frecuencias_palabras(textos):
     st.pyplot(plt)
     plt.clf()
 
+def filtrar_por_palabras(df, columna, palabras_busqueda):
+    palabras_proc = [quitar_tildes(p.strip().lower()) for p in palabras_busqueda if p.strip()]
+    if not palabras_proc:
+        return pd.DataFrame(), {}, {}
+    
+    mask = df[columna].fillna("").apply(
+        lambda txt: any(p in quitar_tildes(txt.lower()) for p in palabras_proc)
+    )
+    df_filtrado = df[mask]
+
+    total_ocurrencias = {}
+    textos_con_palabra = {}
+
+    for p in palabras_proc:
+        ocurrencias = df_filtrado[columna].fillna("").apply(lambda txt: quitar_tildes(txt.lower()).count(p))
+        total_ocurrencias[p] = ocurrencias.sum()
+        textos_con_palabra[p] = (ocurrencias > 0).sum()
+
+    return df_filtrado, total_ocurrencias, textos_con_palabra
+
+
 # --- STREAMLIT ---
 
 st.title("Análisis de preguntas abiertas de encuesta académica")
@@ -175,9 +196,6 @@ if uploaded_file:
     # Filtros para SEDE y NIVEL (si existen en el archivo)
     sedes_disponibles = df['SEDE'].dropna().unique().tolist() if 'SEDE' in df.columns else []
     niveles_disponibles = df['NIVEL'].dropna().unique().tolist() if 'NIVEL' in df.columns else []
-
-    sede_seleccionada = None
-    nivel_seleccionado = None
 
     if sedes_disponibles:
         sede_seleccionada = st.selectbox("Filtra por SEDE (opcional):", ["Todos"] + sedes_disponibles)
@@ -196,13 +214,9 @@ if uploaded_file:
         st.error(f"No se encontraron las columnas {columnas}")
     else:
         columna_seleccionada = st.selectbox("Selecciona la columna a analizar:", columnas_existentes)
-
-        # Detectar si la columna es la pregunta "¿Qué cambios implementarías?" para usar lexicon extendido
-        es_pregunta_cambios = False
-        texto_pregunta = quitar_tildes(columna_seleccionada.lower())
-        if "cambios" in texto_pregunta and "implementarias" in texto_pregunta:
-            es_pregunta_cambios = True
-
+        
+        # Asignar sentimiento, detectando si es la pregunta "¿Qué cambios implementarías?"
+        es_pregunta_cambios = 'cambios' in columna_seleccionada.lower()
         df[columna_seleccionada + '_sentimiento'] = df[columna_seleccionada].apply(lambda x: sentimiento_vader(x, es_pregunta_cambios))
 
         st.subheader(f"Distribución de Sentimientos en {columna_seleccionada}")
@@ -215,7 +229,7 @@ if uploaded_file:
             for t in temas:
                 st.write("- " + t)
 
-            filtro_sentimiento = st.selectbox("Filtrar comentarios por sentimiento para análisis:",
+            filtro_sentimiento = st.selectbox("Filtrar comentarios por sentimiento para nube de palabras:",
                                               ['Todos', 'Positivo', 'Neutro', 'Negativo'])
             if filtro_sentimiento == 'Todos':
                 textos_filtrados = textos_procesados
@@ -231,8 +245,36 @@ if uploaded_file:
                 st.subheader(f"Frecuencia de palabras - Comentarios {filtro_sentimiento}")
                 graficar_frecuencias_palabras(textos_filtrados)
             else:
-                st.info("No hay suficientes comentarios para mostrar visualizaciones.")
+                st.info("No hay suficientes comentarios para mostrar la nube de palabras.")
         else:
             st.info("No hay suficientes textos para análisis de temas (mínimo 10).")
+
+        # Nuevo filtro por palabras clave
+        st.subheader("Búsqueda de palabras clave en los comentarios")
+        palabras_entrada = st.text_input("Ingresa palabras separadas por comas para buscar (ej: examen, presencial, rápido)")
+        if st.button("Buscar palabras"):
+            if palabras_entrada.strip():
+                palabras_lista = [p.strip() for p in palabras_entrada.split(",")]
+                df_filtrado_palabras, total_ocurrencias, textos_con_palabra = filtrar_por_palabras(df, columna_seleccionada, palabras_lista)
+                if df_filtrado_palabras.empty:
+                    st.warning("No se encontraron comentarios que contengan esas palabras.")
+                else:
+                    st.write(f"Se encontraron {len(df_filtrado_palabras)} comentarios que contienen al menos una de las palabras buscadas.")
+
+                    st.write("### Ocurrencias totales por palabra:")
+                    df_ocurrencias = pd.DataFrame({
+                        "Palabra": [p.replace('_', ' ') for p in total_ocurrencias.keys()],
+                        "Total de apariciones": total_ocurrencias.values(),
+                        "Número de textos que la mencionan": [textos_con_palabra[p] for p in total_ocurrencias.keys()]
+                    })
+                    st.dataframe(df_ocurrencias)
+
+                    # Mostrar las frases/textos que contienen las palabras (opcional)
+                    st.write("### Comentarios filtrados:")
+                    st.write(df_filtrado_palabras[[columna_seleccionada]])
+
+            else:
+                st.warning("Por favor, ingresa al menos una palabra para buscar.")
+
 else:
     st.info("Carga un archivo para comenzar el análisis.")
