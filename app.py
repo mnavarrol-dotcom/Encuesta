@@ -10,6 +10,10 @@ import nltk
 import re
 import unicodedata
 from collections import Counter
+import numpy as np
+from scipy.cluster.hierarchy import linkage, leaves_list
+from scipy.spatial.distance import pdist
+import plotly.express as px
 
 nltk.download('stopwords')
 from nltk.corpus import stopwords
@@ -184,39 +188,16 @@ def calcular_coocurrencia(textos, top_n=20):
 
 def graficar_mapa_calor_coocurrencia(coocurrencia_df, titulo="Mapa de Calor de Coocurrencia"):
     """
-    Genera un mapa de calor más informativo y estético.
-    - Normaliza la matriz (proporciones)
-    - Reordena palabras por similitud
-    - Mejora estética y legibilidad
+    Genera un mapa de calor con seaborn.
     """
     if coocurrencia_df.empty:
         st.info("No hay datos suficientes para generar el mapa de calor.")
         return
-
-    # Normalizar valores a proporciones (0–1)
-    coocurrencia_norm = coocurrencia_df / coocurrencia_df.max().max()
-
-    # Reemplazar guiones bajos por espacios para mejor visualización
-    coocurrencia_norm.index = [i.replace("_", " ") for i in coocurrencia_norm.index]
-    coocurrencia_norm.columns = [i.replace("_", " ") for i in coocurrencia_norm.columns]
-
-    # Crear figura
     plt.figure(figsize=(10, 8))
-    sns.set(font_scale=0.9)
-    sns.set_style("whitegrid")
-
-    # Mapa de calor con clúster (agrupa palabras similares)
-    sns.clustermap(
-        coocurrencia_norm,
-        cmap="rocket_r",
-        linewidths=0.5,
-        annot=True,
-        fmt=".2f",
-        cbar_kws={'label': 'Intensidad de coocurrencia'},
-        figsize=(10, 8)
-    )
-
-    plt.title(titulo, fontsize=14, pad=20)
+    sns.heatmap(coocurrencia_df, cmap="YlGnBu", linewidths=0.5)
+    plt.title(titulo)
+    plt.xlabel("Palabras")
+    plt.ylabel("Palabras")
     st.pyplot(plt)
     plt.clf()
    
@@ -304,15 +285,32 @@ if uploaded_file:
             st.info("No hay suficientes textos para análisis de temas (mínimo 10).")
 
 
-     # --- NUEVO: ANÁLISIS DE CONCURRENCIA ---
+      # --- NUEVO: ANÁLISIS DE CONCURRENCIA ---
         st.subheader("🔍 Análisis de concurrencia de palabras")
 
-        if len(textos_filtrados) >= 5:
-            top_n = st.slider("Selecciona cuántas palabras mostrar en el mapa:", 10, 50, 20, step=5)
-            coocurrencia_df = calcular_coocurrencia(textos_filtrados, top_n=top_n)
-            graficar_mapa_calor_coocurrencia(coocurrencia_df, f"Mapa de Calor de Coocurrencia (Top {top_n} palabras)")
+        # Filtro por categoría
+        columnas_categoricas = [c for c in df.columns if df[c].dtype == 'object' and c not in columnas]
+        if columnas_categoricas:
+            categoria_seleccionada = st.selectbox("Selecciona una categoría para filtrar:", ["Ninguna"] + columnas_categoricas)
         else:
-            st.info("No hay suficientes textos para análisis de coocurrencia.")
+            categoria_seleccionada = "Ninguna"
+
+        if categoria_seleccionada != "Ninguna":
+            categorias_unicas = df[categoria_seleccionada].dropna().unique().tolist()
+            categoria_valor = st.selectbox(f"Selecciona un valor de {categoria_seleccionada}:", categorias_unicas)
+            df_filtrado_categoria = df[df[categoria_seleccionada] == categoria_valor]
+            textos_filtrados_cat = preprocesar_textos(df_filtrado_categoria[columna_seleccionada])
+            if len(textos_filtrados_cat) >= 5:
+                coocurrencia_df = calcular_coocurrencia(textos_filtrados_cat)
+                graficar_mapa_calor_coocurrencia(coocurrencia_df, f"Coocurrencia - {categoria_seleccionada}: {categoria_valor}")
+            else:
+                st.info("No hay suficientes textos para analizar esta categoría.")
+        else:
+            if len(textos_procesados) >= 5:
+                coocurrencia_df = calcular_coocurrencia(textos_procesados)
+                graficar_mapa_calor_coocurrencia(coocurrencia_df)
+            else:
+                st.info("No hay suficientes textos para análisis de coocurrencia.")
             
         
         # Nuevo filtro por palabras clave
