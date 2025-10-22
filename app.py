@@ -164,32 +164,44 @@ def graficar_frecuencias_palabras(textos):
     st.pyplot(plt)
     plt.clf()
 
-# --- NUEVO: ANÁLISIS DE CONCURRENCIA ---
-        st.subheader("🔍 Análisis de concurrencia de palabras")
+def calcular_coocurrencia(textos, top_n=20):
+    """
+    Calcula una matriz de coocurrencia entre las palabras más frecuentes.
+    Retorna un DataFrame cuadrado (palabras x palabras).
+    """
+    palabras = " ".join(textos).split()
+    contador = Counter(palabras)
+    palabras_top = [p for p, _ in contador.most_common(top_n)]
 
-        # Filtro por categoría
-        columnas_categoricas = [c for c in df.columns if df[c].dtype == 'object' and c not in columnas]
-        if columnas_categoricas:
-            categoria_seleccionada = st.selectbox("Selecciona una categoría para filtrar:", ["Ninguna"] + columnas_categoricas)
-        else:
-            categoria_seleccionada = "Ninguna"
+    # Inicializar matriz de coocurrencia
+    coocurrencia = pd.DataFrame(0, index=palabras_top, columns=palabras_top)
 
-        if categoria_seleccionada != "Ninguna":
-            categorias_unicas = df[categoria_seleccionada].dropna().unique().tolist()
-            categoria_valor = st.selectbox(f"Selecciona un valor de {categoria_seleccionada}:", categorias_unicas)
-            df_filtrado_categoria = df[df[categoria_seleccionada] == categoria_valor]
-            textos_filtrados_cat = preprocesar_textos(df_filtrado_categoria[columna_seleccionada])
-            if len(textos_filtrados_cat) >= 5:
-                coocurrencia_df = calcular_coocurrencia(textos_filtrados_cat)
-                graficar_mapa_calor_coocurrencia(coocurrencia_df, f"Coocurrencia - {categoria_seleccionada}: {categoria_valor}")
-            else:
-                st.info("No hay suficientes textos para analizar esta categoría.")
-        else:
-            if len(textos_procesados) >= 5:
-                coocurrencia_df = calcular_coocurrencia(textos_procesados)
-                graficar_mapa_calor_coocurrencia(coocurrencia_df)
-            else:
-                st.info("No hay suficientes textos para análisis de coocurrencia.")
+    for texto in textos:
+        tokens = set(texto.split())
+        tokens_filtrados = [t for t in tokens if t in palabras_top]
+        for i in tokens_filtrados:
+            for j in tokens_filtrados:
+                if i != j:
+                    coocurrencia.loc[i, j] += 1
+
+    return coocurrencia
+
+
+def graficar_mapa_calor_coocurrencia(coocurrencia_df, titulo="Mapa de Calor de Coocurrencia"):
+    """
+    Genera un mapa de calor con seaborn.
+    """
+    if coocurrencia_df.empty:
+        st.info("No hay datos suficientes para generar el mapa de calor.")
+        return
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(coocurrencia_df, cmap="YlGnBu", linewidths=0.5)
+    plt.title(titulo)
+    plt.xlabel("Palabras")
+    plt.ylabel("Palabras")
+    st.pyplot(plt)
+    plt.clf()
+   
 
 def filtrar_por_palabras(df, columna, palabras_busqueda):
     palabras_proc = [quitar_tildes(p.strip().lower()) for p in palabras_busqueda if p.strip()]
