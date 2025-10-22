@@ -140,17 +140,41 @@ def graficar_frecuencias_palabras(textos):
     plt.clf()
 
 def filtrar_por_palabras(df, columna, palabras_busqueda):
-    palabras_proc = [quitar_tildes(p.strip().lower()) for p in palabras_busqueda if p.strip()]
+    # --- Preparación ---
+    palabras_proc = [quitar_tildes(str(p).strip().lower()) for p in palabras_busqueda if str(p).strip()]
     if not palabras_proc:
         return pd.DataFrame(), {}, {}
-    mask = df[columna].fillna("").apply(lambda txt: any(p in quitar_tildes(txt.lower()) for p in palabras_proc))
-    df_filtrado = df[mask]
-    total, textos = {}, {}
-    for p in palabras_proc:
-        ocurrencias = df_filtrado[columna].fillna("").apply(lambda txt: quitar_tildes(txt.lower()).count(p))
-        total[p] = ocurrencias.sum()
-        textos[p] = (ocurrencias > 0).sum()
-    return df_filtrado, total, textos
+
+    # Convertir toda la columna a texto seguro y normalizado
+    textos = df[columna].fillna("").astype(str).apply(lambda x: quitar_tildes(x.lower()))
+
+    # Crear patrón regex con todas las palabras
+    patron = "|".join([re.escape(p) for p in palabras_proc])
+    mask = textos.str.contains(patron, regex=True, na=False)
+
+    # Filtrar DataFrame
+    df_filtrado = df[mask].copy()
+
+    # Crear barra de progreso
+    progress_text = "Buscando coincidencias..."
+    barra = st.progress(0, text=progress_text)
+
+    total, textos_con_palabra = {}, {}
+    total_palabras = len(palabras_proc)
+
+    # Calcular ocurrencias palabra por palabra
+    for i, p in enumerate(palabras_proc, start=1):
+        ocurrencias = textos[mask].str.count(p, flags=re.IGNORECASE)
+        total[p] = int(ocurrencias.sum())
+        textos_con_palabra[p] = int((ocurrencias > 0).sum())
+
+        # Actualizar progreso
+        barra.progress(i / total_palabras, text=f"Analizando palabra: '{p}'")
+
+    # Completar barra
+    barra.progress(1.0, text="✅ Búsqueda completada")
+
+    return df_filtrado, total, textos_con_palabra
 
 
 # --- INTERFAZ ---
