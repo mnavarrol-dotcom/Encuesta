@@ -103,7 +103,7 @@ def sentimiento_vader(texto, es_pregunta_cambios=False):
         return 'Neutro'
 
 def codificar_temas(textos, n_topics=3, n_palabras=5):
-    vectorizer = CountVectorizer(stop_words=stopwords_totales, max_features=1000)
+    vectorizer = CountVectorizer(stop_words=list(stopwords_totales), max_features=1000)
     X = vectorizer.fit_transform(textos)
     lda = LatentDirichletAllocation(n_components=n_topics, random_state=42, learning_method='batch')
     lda.fit(X)
