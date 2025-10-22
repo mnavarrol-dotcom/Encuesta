@@ -15,6 +15,12 @@ import nltk
 nltk.download('stopwords')
 from nltk.corpus import stopwords
 
+# -------------------------------
+# CONFIGURACIÓN GENERAL
+# -------------------------------
+st.set_page_config(page_title="Análisis Encuesta Académica", layout="wide")
+sns.set_style("whitegrid")
+
 # Stopwords base y personalizadas
 spanish_stopwords = stopwords.words('spanish')
 stopwords_personalizadas = {'creo', 'hacer', 'siento', 'verdad', 'tan', 'tal', 'pdv', 'asi', 'sido','haria', 'hace'}
@@ -62,7 +68,7 @@ def quitar_tildes(texto):
 def agrupar_mas_con_palabra(texto):
     return re.sub(r'\bmas (\w{3,})', r'mas_\1', texto)
 
-@st.cache_data
+@st.cache_data(ttl=3600)
 def preprocesar_textos(textos):
     procesados = []
     for t in textos:
@@ -83,7 +89,6 @@ def preprocesar_textos(textos):
 # -------------------------------
 # FUNCIONES DE ANÁLISIS
 # -------------------------------
-@st.cache_resource
 def sentimiento_vader_lista(textos, es_pregunta_cambios=False):
     analyzer = SentimentIntensityAnalyzer()
     if es_pregunta_cambios:
@@ -99,7 +104,7 @@ def sentimiento_vader_lista(textos, es_pregunta_cambios=False):
             resultados.append('Positivo' if comp >= 0.05 else 'Negativo' if comp <= -0.05 else 'Neutro')
     return resultados
 
-@st.cache_resource
+@st.cache_resource(ttl=3600)
 def codificar_temas(textos, n_topics=3, n_palabras=5):
     if len(textos) < 5:
         return ["Datos insuficientes"]
@@ -114,7 +119,7 @@ def codificar_temas(textos, n_topics=3, n_palabras=5):
         temas.append(f"Tema {idx+1}: " + ", ".join(top_words))
     return temas
 
-@st.cache_data
+@st.cache_data(ttl=3600)
 def calcular_coocurrencia_opt(textos, top_n=30):
     palabras = " ".join(textos).split()
     top = [p for p, _ in Counter(palabras).most_common(top_n)]
@@ -164,7 +169,7 @@ def graficar_mapa_calor(df, titulo):
         st.info("No hay datos suficientes para el mapa de calor.")
         return
     plt.figure(figsize=(10,8))
-    sns.heatmap(df, cmap="coolwarm", linewidths=0.5)
+    sns.heatmap(df, cmap="YlGnBu", linewidths=0.4)
     plt.title(titulo)
     st.pyplot(plt)
     plt.clf()
@@ -177,28 +182,29 @@ st.title("📊 Análisis optimizado de respuestas abiertas académicas")
 uploaded_file = st.file_uploader("Carga tu archivo Excel (.xlsx)", type=["xlsx"])
 
 if uploaded_file:
-    @st.cache_data
-    def cargar_excel(f):
-        return pd.read_excel(f)
-    
-    df = cargar_excel(uploaded_file)
-    nombre = uploaded_file.name.lower()
+    with st.spinner("Cargando archivo y preparando análisis..."):
+        @st.cache_data(ttl=3600)
+        def cargar_excel(f):
+            return pd.read_excel(f, engine='openpyxl', usecols=lambda x: x.startswith('PREG') or x in ['SEDE','NIVEL'])
+        
+        df = cargar_excel(uploaded_file)
+        nombre = uploaded_file.name.lower()
 
-    # --- Detectar tipo de base automáticamente ---
-    if "acp" in nombre:
-        tipo_detectado = "ACP"
-    elif "ge" in nombre:
-        tipo_detectado = "GE"
-    elif "dynamic" in nombre:
-        tipo_detectado = "Dynamic"
-    elif "3" in nombre or "4" in nombre:
-        tipo_detectado = "3° y 4°"
-    elif "1" in nombre or "2" in nombre:
-        tipo_detectado = "1° y 2°"
-    else:
-        tipo_detectado = "3° y 4°"
+        # Detección automática
+        if "acp" in nombre:
+            tipo_detectado = "ACP"
+        elif "ge" in nombre:
+            tipo_detectado = "GE"
+        elif "dynamic" in nombre:
+            tipo_detectado = "Dynamic"
+        elif "3" in nombre or "4" in nombre:
+            tipo_detectado = "3° y 4°"
+        elif "1" in nombre or "2" in nombre:
+            tipo_detectado = "1° y 2°"
+        else:
+            tipo_detectado = "3° y 4°"
 
-    st.subheader(f"📂 Tipo de base detectada automáticamente: **{tipo_detectado}**")
+    st.subheader(f"📂 Tipo de base detectada: **{tipo_detectado}**")
 
     columnas_por_base = {
         "3° y 4°": ['PREG 24', 'PREG 25', 'PREG 26'],
@@ -210,10 +216,10 @@ if uploaded_file:
     columnas_disponibles = [c for c in columnas_por_base[tipo_detectado] if c in df.columns]
 
     if not columnas_disponibles:
-        st.error("No se encontraron columnas PREG esperadas en la base cargada.")
+        st.error("No se encontraron columnas esperadas para esta base.")
         st.stop()
 
-    # --- Filtros SEDE, NIVEL y PREG ---
+    # Filtros
     col1, col2, col3 = st.columns(3)
     with col1:
         sede_sel = st.multiselect("Filtrar por SEDE:", sorted(df["SEDE"].dropna().unique()) if "SEDE" in df else [])
@@ -227,6 +233,10 @@ if uploaded_file:
     if nivel_sel:
         df = df[df["NIVEL"].isin(nivel_sel)]
 
+    # Modo rápido
+    modo_rapido = st.checkbox("⚡ Activar modo rápido (solo primeras 500 filas)")
+    if modo_rapido:
+        df = df.head(500)
 
     st.subheader(f"📊 Análisis de {preg_sel}")
 
