@@ -31,9 +31,6 @@ EXPRESIONES_UNIDAS = {
     "tutor virtual": "tutor_virtual",
     "apoyo docente": "apoyo_docente",
     "evaluación continua": "evaluacion_continua",
-    "mas didacticas": "mas_didacticas",
-    "mas actividades" : "mas_actividades",
-    "mas apoyo": "mas_apoyo",
     "ensayos presenciales" : "ensayos_presenciales",
     "ensayos virtuales" : "ensayos_virtuales",
 }
@@ -187,16 +184,39 @@ def calcular_coocurrencia(textos, top_n=20):
 
 def graficar_mapa_calor_coocurrencia(coocurrencia_df, titulo="Mapa de Calor de Coocurrencia"):
     """
-    Genera un mapa de calor con seaborn.
+    Genera un mapa de calor más informativo y estético.
+    - Normaliza la matriz (proporciones)
+    - Reordena palabras por similitud
+    - Mejora estética y legibilidad
     """
     if coocurrencia_df.empty:
         st.info("No hay datos suficientes para generar el mapa de calor.")
         return
+
+    # Normalizar valores a proporciones (0–1)
+    coocurrencia_norm = coocurrencia_df / coocurrencia_df.max().max()
+
+    # Reemplazar guiones bajos por espacios para mejor visualización
+    coocurrencia_norm.index = [i.replace("_", " ") for i in coocurrencia_norm.index]
+    coocurrencia_norm.columns = [i.replace("_", " ") for i in coocurrencia_norm.columns]
+
+    # Crear figura
     plt.figure(figsize=(10, 8))
-    sns.heatmap(coocurrencia_df, cmap="YlGnBu", linewidths=0.5)
-    plt.title(titulo)
-    plt.xlabel("Palabras")
-    plt.ylabel("Palabras")
+    sns.set(font_scale=0.9)
+    sns.set_style("whitegrid")
+
+    # Mapa de calor con clúster (agrupa palabras similares)
+    sns.clustermap(
+        coocurrencia_norm,
+        cmap="rocket_r",
+        linewidths=0.5,
+        annot=True,
+        fmt=".2f",
+        cbar_kws={'label': 'Intensidad de coocurrencia'},
+        figsize=(10, 8)
+    )
+
+    plt.title(titulo, fontsize=14, pad=20)
     st.pyplot(plt)
     plt.clf()
    
@@ -284,15 +304,16 @@ if uploaded_file:
             st.info("No hay suficientes textos para análisis de temas (mínimo 10).")
 
 
-       # --- NUEVO: ANÁLISIS DE CONCURRENCIA ---
+     # --- NUEVO: ANÁLISIS DE CONCURRENCIA ---
         st.subheader("🔍 Análisis de concurrencia de palabras")
 
         if len(textos_filtrados) >= 5:
-            coocurrencia_df = calcular_coocurrencia(textos_filtrados)
-            graficar_mapa_calor_coocurrencia(coocurrencia_df, "Mapa de Calor de Coocurrencia de Palabras")
+            top_n = st.slider("Selecciona cuántas palabras mostrar en el mapa:", 10, 50, 20, step=5)
+            coocurrencia_df = calcular_coocurrencia(textos_filtrados, top_n=top_n)
+            graficar_mapa_calor_coocurrencia(coocurrencia_df, f"Mapa de Calor de Coocurrencia (Top {top_n} palabras)")
         else:
             st.info("No hay suficientes textos para análisis de coocurrencia.")
-
+            
         
         # Nuevo filtro por palabras clave
         st.subheader("Búsqueda de palabras clave en los comentarios")
