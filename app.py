@@ -1,19 +1,43 @@
 import streamlit as st
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import seaborn as sns
+import nltk
+import unicodedata
+import re
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+from collections import Counter
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
 from wordcloud import WordCloud
-import itertools
-import re
-import unicodedata
-from collections import Counter, defaultdict
-import nltk
-
-nltk.download('stopwords')
 from nltk.corpus import stopwords
+
+# --- OPTIMIZACIÓN DE CARGA ---
+# Descargar stopwords solo si no existen
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords', quiet=True)
+
+# Cachear el analizador de sentimiento
+@st.cache_resource
+def get_analyzer():
+    return SentimentIntensityAnalyzer()
+
+analyzer = get_analyzer()
+
+# Cachear datos pesados
+@st.cache_data(ttl=3600)
+def cargar_excel(uploaded_file):
+    # Cargar solo columnas relevantes
+    df = pd.read_excel(
+        uploaded_file,
+        engine='openpyxl',
+        usecols=lambda c: c.startswith('PREG') or c in ['SEDE', 'NIVEL']
+    )
+    return df
 
 # -------------------------------
 # CONFIGURACIÓN GENERAL
