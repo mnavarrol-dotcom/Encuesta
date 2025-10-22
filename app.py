@@ -58,7 +58,6 @@ def quitar_tildes(texto):
     texto = unicodedata.normalize('NFD', texto)
     texto = ''.join([c for c in texto if unicodedata.category(c) != 'Mn'])
     return texto
-    )
 
 # Agrupar "mas <palabra>" → mas_palabra
 def agrupar_mas_con_palabra(texto):
