@@ -36,6 +36,8 @@ EXPRESIONES_UNIDAS = {
     "mas apoyo": "mas_apoyo",
     "ensayos presenciales" : "ensayos_presenciales",
     "ensayos virtuales" : "ensayos_virtuales",
+    "cambio de profesor" : "cambio_de_profesor",
+    "cambio de profe" : "cambio_de_profe",
 }
 
 # Lexicon base de VADER en español
