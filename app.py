@@ -34,7 +34,7 @@ EXPRESIONES_UNIDAS = {
     "mas didacticas": "mas_didacticas",
     "mas actividades" : "mas_actividades",
     "mas apoyo": "mas_apoyo",
-    "ensayos presenciales: "ensayos_presenciales",
+    "ensayos presenciales" : "ensayos_presenciales",
     "ensayos virtuales: "ensayos_virtuales",
 }
 
