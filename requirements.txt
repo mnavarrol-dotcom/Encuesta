@@ -1,0 +1,9 @@
+streamlit
+vaderSentiment
+scikit-learn
+wordcloud
+nltk
+pandas
+seaborn
+matplotlib
+openpyxl
