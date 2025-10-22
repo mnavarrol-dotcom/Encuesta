@@ -169,65 +169,61 @@ def filtrar_por_palabras(df, columna, palabras_busqueda):
         textos[p] = (ocurrencias > 0).sum()
     return df_filtrado, total, textos
 
-# --- INTERFAZ PRINCIPAL ---
-uploaded_file = st.file_uploader("📥 Carga tu archivo Excel (.xlsx)", type=["xlsx"])
+uploaded_file = st.file_uploader("Carga tu archivo Excel (.xlsx)", type=["xlsx"])
 if uploaded_file:
-    with st.spinner("Cargando archivo..."):
-        df = cargar_excel(uploaded_file)
+    df = pd.read_excel(uploaded_file)
+    nombre = uploaded_file.name.lower()
 
-    # --- DETECTAR BASE AUTOMÁTICAMENTE ---
-    columnas = df.columns
-    if {'PREG 24','PREG 25','PREG 26'}.issubset(columnas):
-        tipo_base = "3° y 4°"
-        columnas_objetivo = ['PREG 24','PREG 25','PREG 26']
-    elif {'PREG 21','PREG 22','PREG 23'}.issubset(columnas):
-        tipo_base = "1° y 2°"
-        columnas_objetivo = ['PREG 21','PREG 22','PREG 23']
-    elif {'PREG 22','PREG 23','PREG 24'}.issubset(columnas):
-        tipo_base = "ACP"
-        columnas_objetivo = ['PREG 22','PREG 23','PREG 24']
-    elif {'PREG 25','PREG 26','PREG 27'}.issubset(columnas):
-        tipo_base = "GE o Dynamic"
-        columnas_objetivo = ['PREG 25','PREG 26','PREG 27']
+    # Detección automática de base
+    if "acp" in nombre:
+        tipo_detectado = "ACP"
+    elif "ge" in nombre:
+        tipo_detectado = "GE"
+    elif "dynamic" in nombre:
+        tipo_detectado = "Dynamic"
+    elif "3" in nombre or "4" in nombre:
+        tipo_detectado = "3° y 4°"
+    elif "1" in nombre or "2" in nombre:
+        tipo_detectado = "1° y 2°"
     else:
-        st.error("No se pudo identificar el tipo de base. Verifica las columnas.")
-        st.stop()
+        tipo_detectado = "3° y 4°"
 
-    st.success(f"Base detectada automáticamente: **{tipo_base}**")
+    opciones = ["3° y 4°", "1° y 2°", "ACP", "GE", "Dynamic"]
+    tipo_base = st.selectbox("Selecciona el tipo de base:", opciones, index=opciones.index(tipo_detectado))
 
-    # --- FILTROS SEDE / NIVEL ---
-    if 'SEDE' in df.columns:
-        sede_sel = st.selectbox("Filtrar por SEDE:", ["Todos"] + sorted(df['SEDE'].dropna().unique().tolist()))
-        if sede_sel != "Todos":
-            df = df[df['SEDE'] == sede_sel]
-    if 'NIVEL' in df.columns:
-        nivel_sel = st.selectbox("Filtrar por NIVEL:", ["Todos"] + sorted(df['NIVEL'].dropna().unique().tolist()))
-        if nivel_sel != "Todos":
-            df = df[df['NIVEL'] == nivel_sel]
+    columnas_por_base = {
+        "3° y 4°": ['PREG 24', 'PREG 25', 'PREG 26'],
+        "1° y 2°": ['PREG 21', 'PREG 22', 'PREG 23'],
+        "ACP": ['PREG 22', 'PREG 23', 'PREG 24'],
+        "GE": ['PREG 25', 'PREG 26', 'PREG 27'],
+        "Dynamic": ['PREG 25', 'PREG 26', 'PREG 27']
+    }
 
-    # --- SELECCIONAR COLUMNA ---
-    columna_seleccionada = st.selectbox("Selecciona la pregunta a analizar:", columnas_objetivo)
+    columnas = [c for c in columnas_por_base[tipo_base] if c in df.columns]
+    if not columnas:
+        st.error("No se encontraron las columnas esperadas.")
+    else:
+        st.success(f"Analizando columnas: {', '.join(columnas)}")
 
-    # --- ANÁLISIS PRINCIPAL ---
-    with st.spinner("Procesando análisis..."):
-        es_cambios = 'cambio' in columna_seleccionada.lower()
-        df[columna_seleccionada + '_sentimiento'] = df[columna_seleccionada].apply(lambda x: sentimiento_vader(x, es_cambios))
-        graficar_distribucion_sentimientos(df[columna_seleccionada + '_sentimiento'], columna_seleccionada)
+        for col in columnas:
+            st.subheader(f"🔹 Análisis de: {col}")
+            es_pregunta_cambios = 'cambio' in col.lower()
+            df[col + '_sentimiento'] = df[col].apply(lambda x: sentimiento_vader(x, es_pregunta_cambios))
+            graficar_distribucion_sentimientos(df[col + '_sentimiento'], col)
 
-        textos_proc = preprocesar_textos(df[columna_seleccionada])
-        if len(textos_proc) >= 10:
-            st.subheader("Temas identificados")
-            temas = codificar_temas(textos_proc)
-            for t in temas:
-                st.write("• " + t)
+            textos = preprocesar_textos(df[col])
+            if len(textos) >= 5:
+                st.write("Temas identificados:")
+                for t in codificar_temas(textos):
+                    st.write("-", t)
+                mostrar_nube(textos)
+                graficar_frecuencias_palabras(textos)
 
-            st.subheader("☁️ Nube de palabras")
-            mostrar_nube(textos_proc)
-
-            st.subheader("🔠 Frecuencia de palabras")
-            graficar_frecuencias_palabras(textos_proc)
-        else:
-            st.info("No hay suficientes textos para el análisis de temas (mínimo 10).")
+                st.subheader("Mapa de calor de coocurrencia")
+                cooc = calcular_coocurrencia(textos)
+                graficar_mapa_calor_coocurrencia(cooc)
+            else:
+                st.info("No hay suficientes textos para análisis.")
 
     # --- NUEVO FILTRO POR PALABRAS CLAVE ---
     st.subheader("🔍 Búsqueda de palabras clave en los comentarios")
