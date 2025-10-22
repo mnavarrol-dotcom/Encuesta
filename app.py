@@ -193,8 +193,6 @@ if uploaded_file:
         if nivel_sel != "Todos":
             df = df[df['NIVEL'] == nivel_sel]
 
-    columna_seleccionada = st.selectbox("Selecciona la pregunta a analizar:", columnas_objetivo)
-
     st.divider()
     st.subheader(f"🔍 Análisis de {columna_seleccionada}")
 
