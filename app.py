@@ -17,7 +17,7 @@ from nltk.corpus import stopwords
 
 # Stopwords en español + personalizadas
 spanish_stopwords = stopwords.words('spanish')
-stopwords_personalizadas = {'creo', 'hacer', 'siento', 'verdad', 'tan'}
+stopwords_personalizadas = {'creo', 'hacer', 'siento', 'verdad', 'tan', 'tal', 'pdv', 'asi', 'sido','haria'}
 stopwords_totales = set(spanish_stopwords) | stopwords_personalizadas
 
 # Expresiones clave para agrupar (opcional)
@@ -36,19 +36,28 @@ EXPRESIONES_UNIDAS = {
 
 # Inicializar VADER
 analyzer = SentimentIntensityAnalyzer()
-spanish_lexicon = {
+# Base lexicon VADER
+base_lexicon = {
     'bueno': 2.0, 'excelente': 3.0, 'malo': -2.0, 'terrible': -3.0,
     'agradable': 1.5, 'horrible': -3.0, 'fácil': 1.0, 'difícil': -1.5,
     'útil': 2.0, 'pésimo': -3.0, 'mejor': 2.0, 'peor': -2.0,
     'rápido': 1.5, 'lento': -1.5,
 }
+
+# Lexicon extendido para la pregunta ¿Qué cambios implementarías?
+lexicon_cambios = {
+    'mejorar': 2.0, 'incrementar': 1.5, 'reducir': -1.0, 'cambiar': 1.0, 'adaptar': 1.5,
+    'problema': -2.0, 'problemas': -2.0, 'error': -2.5, 'falla': -2.5,
+    'sugerencia': 1.0, 'sugerencias': 1.0, 'más_apoyo': 2.0, 'más_claridad': 1.5,
+    'flexible': 1.5, 'dificultad': -2.0, 'complicado': -2.0,
+}
 analyzer.lexicon.update(spanish_lexicon)
 
 # Eliminar tildes
 def quitar_tildes(texto):
-    return ''.join(
-        c for c in unicodedata.normalize('NFD', texto)
-        if unicodedata.category(c) != 'Mn'
+    texto = unicodedata.normalize('NFD', texto)
+    texto = ''.join([c for c in texto if unicodedata.category(c) != 'Mn'])
+    return texto
     )
 
 # Agrupar "mas <palabra>" → mas_palabra
@@ -63,6 +72,7 @@ def preprocesar_textos(textos):
             continue
         t = t.lower()
         t = quitar_tildes(t)
+        t = re.sub(r'\s+', ' ', t)  # eliminar espacios dobles
 
         # Agrupar expresiones definidas
         for expresion, reemplazo in EXPRESIONES_UNIDAS.items():
@@ -73,6 +83,7 @@ def preprocesar_textos(textos):
 
         # Eliminar signos y caracteres especiales
         t = re.sub(r'[^a-zA-Z_ñ\s]', '', t)
+        t = re.sub(r'\s+', ' ', t).strip()  # eliminar espacios dobles de nuevo
 
         palabras = t.split()
         palabras_filtradas = [p for p in palabras if p not in stopwords_totales and len(p) > 2]
@@ -81,11 +92,16 @@ def preprocesar_textos(textos):
     return textos_procesados
 
 # Sentimiento con VADER
-def sentimiento_vader(texto):
+def sentimiento_vader(texto, es_pregunta_cambios=False):
     if not isinstance(texto, str) or not texto.strip():
         return None
-    scores = analyzer.polarity_scores(texto)
-    compound = scores['compound']
+    scores = SentimentIntensityAnalyzer()
+    if es_pregunta_cambios:
+        scores.lexicon.update({**base_lexicon, **lexicon_cambios})
+    else:
+        scores.lexicon.update(base_lexicon)
+    polarity = scores.polarity_scores(texto)
+    compound = polarity['compound']
     if compound >= 0.05:
         return 'Positivo'
     elif compound <= -0.05:
@@ -158,7 +174,14 @@ if uploaded_file:
         st.error(f"No se encontraron las columnas {columnas}")
     else:
         columna_seleccionada = st.selectbox("Selecciona la columna a analizar:", columnas_existentes)
-        df[columna_seleccionada + '_sentimiento'] = df[columna_seleccionada].apply(sentimiento_vader)
+        
+        # Detectar si la columna es la pregunta "¿Qué cambios implementarías?" para usar lexicon extendido
+        es_pregunta_cambios = False
+        texto_pregunta = quitar_tildes(columna_seleccionada.lower())
+        if "cambios" in texto_pregunta and "implementarias" in texto_pregunta:
+            es_pregunta_cambios = True
+
+        df[columna_seleccionada + '_sentimiento'] = df[columna_seleccionada].apply(lambda x: sentimiento_vader(x, es_pregunta_cambios))
 
         st.subheader(f"Distribución de Sentimientos en {columna_seleccionada}")
         graficar_distribucion_sentimientos(df[columna_seleccionada + '_sentimiento'], columna_seleccionada)
@@ -191,6 +214,5 @@ if uploaded_file:
             st.info("No hay suficientes textos para análisis de temas (mínimo 10).")
 else:
     st.info("Carga un archivo para comenzar el análisis.")
-
 
 
