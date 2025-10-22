@@ -11,16 +11,15 @@ import re
 import unicodedata
 from collections import Counter
 
-# Descargar stopwords de NLTK
 nltk.download('stopwords')
 from nltk.corpus import stopwords
 
-# Stopwords en español + personalizadas
+# Stopwords base y personalizadas
 spanish_stopwords = stopwords.words('spanish')
 stopwords_personalizadas = {'creo', 'hacer', 'siento', 'verdad', 'tan', 'tal', 'pdv', 'asi', 'sido','haria'}
 stopwords_totales = set(spanish_stopwords) | stopwords_personalizadas
 
-# Expresiones clave para agrupar (opcional)
+# Expresiones que se unen para no separarlas
 EXPRESIONES_UNIDAS = {
     "ensayo presencial": "ensayo_presencial",
     "clases virtuales": "clases_virtuales",
@@ -34,9 +33,7 @@ EXPRESIONES_UNIDAS = {
     "evaluación continua": "evaluacion_continua"
 }
 
-# Inicializar VADER
-analyzer = SentimentIntensityAnalyzer()
-# Base lexicon VADER
+# Lexicon base de VADER en español
 base_lexicon = {
     'bueno': 2.0, 'excelente': 3.0, 'malo': -2.0, 'terrible': -3.0,
     'agradable': 1.5, 'horrible': -3.0, 'fácil': 1.0, 'difícil': -1.5,
@@ -48,21 +45,19 @@ base_lexicon = {
 lexicon_cambios = {
     'mejorar': 2.0, 'incrementar': 1.5, 'reducir': -1.0, 'cambiar': 1.0, 'adaptar': 1.5,
     'problema': -2.0, 'problemas': -2.0, 'error': -2.5, 'falla': -2.5,
-    'sugerencia': 1.0, 'sugerencias': 1.0, 'más_apoyo': 2.0, 'más_claridad': 1.5,
+    'sugerencia': 1.0, 'sugerencias': 1.0, 'mas_apoyo': 2.0, 'mas_claridad': 1.5,
     'flexible': 1.5, 'dificultad': -2.0, 'complicado': -2.0,
 }
 
-# Eliminar tildes
 def quitar_tildes(texto):
     texto = unicodedata.normalize('NFD', texto)
     texto = ''.join([c for c in texto if unicodedata.category(c) != 'Mn'])
     return texto
 
-# Agrupar "mas <palabra>" → mas_palabra
 def agrupar_mas_con_palabra(texto):
+    # Agrupa "mas palabra" -> "mas_palabra" (palabra de al menos 3 letras)
     return re.sub(r'\bmas (\w{3,})', r'mas_\1', texto)
 
-# Preprocesamiento general
 def preprocesar_textos(textos):
     textos_procesados = []
     for t in textos:
@@ -72,16 +67,16 @@ def preprocesar_textos(textos):
         t = quitar_tildes(t)
         t = re.sub(r'\s+', ' ', t)  # eliminar espacios dobles
 
-        # Agrupar expresiones definidas
+        # Reemplazar expresiones unidas
         for expresion, reemplazo in EXPRESIONES_UNIDAS.items():
             t = t.replace(expresion, reemplazo)
 
-        # Agrupar dinámicamente "mas <palabra>"
+        # Agrupar "mas + palabra"
         t = agrupar_mas_con_palabra(t)
 
-        # Eliminar signos y caracteres especiales
+        # Eliminar caracteres no alfabéticos excepto guion bajo y ñ
         t = re.sub(r'[^a-zA-Z_ñ\s]', '', t)
-        t = re.sub(r'\s+', ' ', t).strip()  # eliminar espacios dobles de nuevo
+        t = re.sub(r'\s+', ' ', t).strip()  # limpiar espacios dobles de nuevo
 
         palabras = t.split()
         palabras_filtradas = [p for p in palabras if p not in stopwords_totales and len(p) > 2]
@@ -89,17 +84,17 @@ def preprocesar_textos(textos):
             textos_procesados.append(" ".join(palabras_filtradas))
     return textos_procesados
 
-# Sentimiento con VADER
 def sentimiento_vader(texto, es_pregunta_cambios=False):
     if not isinstance(texto, str) or not texto.strip():
         return None
-    scores = SentimentIntensityAnalyzer()
+    analyzer = SentimentIntensityAnalyzer()
+    # Actualizar lexicon según pregunta
     if es_pregunta_cambios:
-        scores.lexicon.update({**base_lexicon, **lexicon_cambios})
+        analyzer.lexicon.update({**base_lexicon, **lexicon_cambios})
     else:
-        scores.lexicon.update(base_lexicon)
-    polarity = scores.polarity_scores(texto)
-    compound = polarity['compound']
+        analyzer.lexicon.update(base_lexicon)
+    scores = analyzer.polarity_scores(texto)
+    compound = scores['compound']
     if compound >= 0.05:
         return 'Positivo'
     elif compound <= -0.05:
@@ -107,9 +102,8 @@ def sentimiento_vader(texto, es_pregunta_cambios=False):
     else:
         return 'Neutro'
 
-# Análisis de temas con LDA
 def codificar_temas(textos, n_topics=3, n_palabras=5):
-    vectorizer = CountVectorizer(stop_words=spanish_stopwords, max_features=1000)
+    vectorizer = CountVectorizer(stop_words=stopwords_totales, max_features=1000)
     X = vectorizer.fit_transform(textos)
     lda = LatentDirichletAllocation(n_components=n_topics, random_state=42, learning_method='batch')
     lda.fit(X)
@@ -120,45 +114,44 @@ def codificar_temas(textos, n_topics=3, n_palabras=5):
         temas.append(f"Tema {idx+1}: " + ", ".join(top_words))
     return temas, lda, vectorizer
 
-# Distribución de sentimientos
 def graficar_distribucion_sentimientos(data, columna):
     plt.figure(figsize=(6,4))
-    sns.countplot(x=data, palette=['#e74c3c', '#95a5a6', '#2ecc71'])
+    palette = {'Negativo': '#e74c3c', 'Neutro': '#95a5a6', 'Positivo': '#2ecc71'}
+    sns.countplot(x=data, palette=palette)
     plt.title(f"Distribución Sentimientos - {columna}")
     plt.xlabel("Sentimiento")
     plt.ylabel("Cantidad")
     plt.tight_layout()
     st.pyplot(plt)
+    plt.clf()
 
-# Nube de palabras
 def mostrar_nube(textos):
     texto_unido = " ".join(textos)
-    wordcloud = WordCloud(stopwords=set(spanish_stopwords), background_color="white",
+    wordcloud = WordCloud(stopwords=stopwords_totales, background_color="white",
                           width=800, height=400).generate(texto_unido)
     plt.figure(figsize=(10,5))
     plt.imshow(wordcloud, interpolation='bilinear')
     plt.axis('off')
     st.pyplot(plt)
+    plt.clf()
 
-# Frecuencias de palabras
-def graficar_frecuencias_palabras(textos, top_n=20):
+def graficar_frecuencias_palabras(textos):
     palabras = " ".join(textos).split()
     contador = Counter(palabras)
-    palabras_comunes = contador.most_common(top_n)
+    mas_comunes = contador.most_common(20)
+    palabras_comunes = [p[0].replace('_', ' ') for p in mas_comunes]
+    frecuencias = [p[1] for p in mas_comunes]
 
-    if palabras_comunes:
-        palabras, frecuencias = zip(*palabras_comunes)
-        plt.figure(figsize=(10, 5))
-        sns.barplot(x=list(frecuencias), y=list(palabras), palette='viridis')
-        plt.title(f"Top {top_n} palabras más frecuentes")
-        plt.xlabel("Frecuencia")
-        plt.ylabel("Palabra")
-        plt.tight_layout()
-        st.pyplot(plt)
-    else:
-        st.info("No hay suficientes palabras para mostrar frecuencias.")
+    plt.figure(figsize=(10,6))
+    sns.barplot(x=frecuencias, y=palabras_comunes, palette="viridis")
+    plt.title("Frecuencia de palabras más comunes")
+    plt.xlabel("Frecuencia")
+    plt.ylabel("Palabras")
+    plt.tight_layout()
+    st.pyplot(plt)
+    plt.clf()
 
-# ----------------- APP STREAMLIT -----------------
+# --- STREAMLIT ---
 
 st.title("Análisis de preguntas abiertas de encuesta académica")
 
@@ -212,5 +205,3 @@ if uploaded_file:
             st.info("No hay suficientes textos para análisis de temas (mínimo 10).")
 else:
     st.info("Carga un archivo para comenzar el análisis.")
-
-
