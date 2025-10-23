@@ -140,7 +140,8 @@ def analisis_temas_sentimientos(df, textos_proc, temas_pred, sentimientos, lista
     st.subheader("📈 Distribución de sentimientos por tema")
     plt.figure(figsize=(7, 4))
     pivot_data = resumen_temas.pivot(index='Tema', columns='Sentimiento', values='Porcentaje').fillna(0)
-    pivot_data[['Positivo', 'Neutro', 'Negativo']].plot(kind='bar', stacked=True, figsize=(7, 4), color=['#2ecc71','#95a5a6','#e74c3c'])
+    cols_presentes = [c for c in ['Positivo', 'Neutro', 'Negativo'] if c in pivot_data.columns]
+    pivot_data[cols_presentes].plot(kind='bar', stacked=True, figsize=(7, 4), color=['#2ecc71','#95a5a6','#e74c3c'][:len(cols_presentes)])
     plt.ylabel('% de respuestas')
     plt.title('Distribución porcentual de sentimientos por tema')
     plt.legend(title='Sentimiento', bbox_to_anchor=(1.05, 1), loc='upper left')
